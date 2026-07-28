@@ -246,16 +246,6 @@ enum
     SCALE_PLACE
 }
 
-new Float:g_fDirections[][] =
-{
-    {-1.0, 0.0, 0.0},
-    {1.0, 0.0, 0.0},
-    {0.0, -1.0, 0.0},
-    {0.0, 1.0, 0.0},
-    {0.0, 0.0, -1.0},
-    {0.0, 0.0, 1.0}
-}
-
 new g_szMenuHandler[][] =
 {
     "menuHandlerRoot",
@@ -1709,28 +1699,20 @@ public boxCorners(eCamper[CAMPER])
 
 stock camperSetOffset(eCamper[CAMPER])
 {
-    new Float:fGaps[6], Float:fVec1[3], Float:fCurrentGap
-    fGaps[0] = -eCamper[CAMPER_MINS][0]
-    fGaps[1] = eCamper[CAMPER_MAXS][0]
-    fGaps[2] = -eCamper[CAMPER_MINS][1]
-    fGaps[3] = eCamper[CAMPER_MAXS][1]
-    fGaps[4] = -eCamper[CAMPER_MINS][2]
-    fGaps[5] = eCamper[CAMPER_MAXS][2]
+    new Float:fVec1[3], Float:fGap, Float:fCurrentGap
+    fGap = -eCamper[CAMPER_MINS][2]
 
-    for ( new i = 0; i < 6; i ++ )
+    xs_vec_mul_scalar(Float:{0.0, 0.0, -1.0}, 9999.9, fVec1)
+    xs_vec_add(fVec1, eCamper[CAMPER_ORIGIN], fVec1)
+    engfunc(EngFunc_TraceLine, eCamper[CAMPER_ORIGIN], fVec1, DONT_IGNORE_MONSTERS, eCamper[CAMPER_ID], 0)
+    get_tr2(0, TR_vecEndPos, fVec1)
+    fCurrentGap = xs_vec_distance(eCamper[CAMPER_ORIGIN], fVec1)
+
+    if ( fCurrentGap < (fGap + 1.0) )
     {
-        xs_vec_mul_scalar(g_fDirections[i], 9999.9, fVec1)
-        xs_vec_add(fVec1, eCamper[CAMPER_ORIGIN], fVec1)
-        engfunc(EngFunc_TraceLine, eCamper[CAMPER_ORIGIN], fVec1, DONT_IGNORE_MONSTERS, eCamper[CAMPER_ID], 0)
-        get_tr2(0, TR_vecEndPos, fVec1)
-        fCurrentGap = xs_vec_distance(eCamper[CAMPER_ORIGIN], fVec1)
-
-        if ( fCurrentGap < (fGaps[i] + 1.0) )
-        {
-            get_tr2(0, TR_vecPlaneNormal, fVec1)
-            xs_vec_mul_scalar(fVec1, (fGaps[i] + 1.0) - fCurrentGap, fVec1)
-            xs_vec_add(eCamper[CAMPER_ORIGIN], fVec1, eCamper[CAMPER_ORIGIN])
-        }
+        get_tr2(0, TR_vecPlaneNormal, fVec1)
+        xs_vec_mul_scalar(fVec1, (fGap + 1.0) - fCurrentGap, fVec1)
+        xs_vec_add(eCamper[CAMPER_ORIGIN], fVec1, eCamper[CAMPER_ORIGIN])
     }
 }
 
@@ -1832,7 +1814,6 @@ stock camperPlayer(eCamper[CAMPER], Float:fCurrentTime)
                 g_ePlayerData[id][PDATA_NEXT_DAMAGE_MULTIPLIER] = 0.0
             }
 
-            client_print(1, print_chat, "Next reset: %.2f || %.2f", g_ePlayerData[id][PDATA_NEXT_RESET], fCurrentTime)
             continue
         }
         else if ( g_ePlayerData[id][PDATA_NEXT_RESET] )
