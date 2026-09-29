@@ -47,17 +47,21 @@
     #define MAX_PLATFORM_PATH_LENGTH 256
 #endif
 
-#define ADMIN_ACCESS                ADMIN_RCON
 #define MAX_ENT                     32
+#define ADMIN_ACCESS                ADMIN_RCON
 #define CAMPER_KEY                  294102
 #define CAMPER_ARRAY_ITEM           pev_iuser1
-
+#define PDATA_NEXT_ATTACK           83
 #define XO_CBASEPLAYER              5
 #define XO_CBASEPLAYERWEAPON        4
+#define SOUND_NAV                   "buttons/blip1.wav"
+#define SOUND_REMOVE                "buttons/button10.wav"
+#define SOUND_ALERT                 "buttons/bell1.wav"
 
-new const PLUGIN_VERSION[]       = "1.0"
-new const Float:DELAY_ON_CONNECT = 1.0
-new const ERROR_FILE[]           = "CamperZone_ERRORS.log"
+new const PLUGIN_VERSION[]          = "1.0"
+new const Float:DELAY_ON_CONNECT    = 1.0
+new const Float:DELAY_ON_LOAD       = 1.0
+new const ERROR_FILE[]              = "CamperZone_ERRORS.log"
 
 enum
 {
@@ -68,37 +72,34 @@ enum
 
 enum
 {
-    DTYPE_FLOAT,
-    DTYPE_FLOAT_RANGE,
     DTYPE_INT,
-    DTYPE_BOOL,
+    DTYPE_FLOAT,
     DTYPE_FLAGS,
-    DTYPE_VECTOR,
-    DTYPE_ARRAY,
+    DTYPE_ARRAY_STRING,
+    DTYPE_ARRAY_SOUND,
     DTYPE_STRING_MODEL,
     DTYPE_STRING_SOUND,
-    DTYPE_STRING_SPRITE
+    DTYPE_STRING_MODEL_ID
 }
 
 enum
 {
-    FLAG_ACTIVE_DELAY       = (1 << 0),
-    FLAG_ACTIVE_DURATION    = (1 << 1),
-    FLAG_WARNING_SLAP       = (1 << 2),
-    FLAG_WARNING_MESSAGE    = (1 << 3),
-    FLAG_DAMAGE_SLAP        = (1 << 4),
+    FLAG_WARNING_SLAP       = (1 << 0),
+    FLAG_WARNING_MESSAGE    = (1 << 1),
+    FLAG_DAMAGE_SLAP        = (1 << 2),
 
-    FLAG_GHOST              = (1 << 5),
-    FLAG_SELECT             = (1 << 6),
-    FLAG_ACTIVE             = (1 << 7),
-    FLAG_MESSAGE            = (1 << 8),
+    FLAG_GHOST              = (1 << 3),
+    FLAG_SELECT             = (1 << 4),
+    FLAG_ACTIVE             = (1 << 5),
+    FLAG_MESSAGE            = (1 << 6)
 }
 
 enum
 {
-    SOUND_MENU_NAV,
-    SOUND_MENU_REMOVE,
-    SOUND_MENU_ALERT
+    TARGET_GHOST,
+    TARGET_SELECT,
+    TARGET_HIDE,
+    TARGET_CLEAR
 }
 
 enum _:MAIN_SETTINGS
@@ -116,13 +117,11 @@ enum _:MAIN_SETTINGS
     Float:SETTING_DEFAULT_DAMAGE_RESET_DELAY,
     Float:SETTING_DEFAULT_DAMAGE_MULTIPLIER_DELAY,
     Float:SETTING_DEFAULT_DAMAGE_MULTIPLIER,
-    Float:SETTING_DEFAULT_ACTIVE_CHANCE,
-    Float:SETTING_DEFAULT_ACTIVE_DELAY[2],
-    Float:SETTING_DEFAULT_ACTIVE_DURATION[2],
-    Float:SETTING_DEFAULT_ACTIVE_COOLDOWN[2],
+    SETTING_DEFAULT_DAMAGETYPE,
 
     bool:SETTING_CAMPER_LOAD,
     Float:SETTING_CAMPER_CHECK,
+    Float:SETTING_CAMPER_TASK,
     Float:SETTING_OFFSET_BASE,
     Float:SETTING_OFFSET[2],
     Float:SETTING_OFFSET_STEP,
@@ -133,14 +132,9 @@ enum _:MAIN_SETTINGS
     Float:SETTING_SIZE_WIDTH[2],
     Float:SETTING_SIZE_DEPTH[2],
 
-    SETTING_SOUND_MENU_NAV[MAX_RESOURCE_PATH_LENGTH],
-    SETTING_SOUND_MENU_REMOVE[MAX_RESOURCE_PATH_LENGTH],
-    SETTING_SOUND_MENU_ALERT[MAX_RESOURCE_PATH_LENGTH],
     SETTING_BEAM,
     SETTING_BEAM_WIDTH,
-    SETTING_BEAM_ALPHA,
-    SETTING_COLOR_ACTIVE[3],
-    SETTING_COLOR_INACTIVE[3]
+    SETTING_BEAM_ALPHA
 }
 
 enum _:CAMPER
@@ -160,19 +154,13 @@ enum _:CAMPER
     Float:CAMPER_DAMAGE_RESET_DELAY,
     Float:CAMPER_DAMAGE_MULTIPLIER_DELAY,
     Float:CAMPER_DAMAGE_MULTIPLIER,
-
-    Float:CAMPER_ACTIVE_CHANCE,
-    Float:CAMPER_ACTIVE_DELAY[2],
-    Float:CAMPER_ACTIVE_DURATION[2],
-    Float:CAMPER_ACTIVE_COOLDOWN[2],
+    CAMPER_DAMAGETYPE,
 
     Float:CAMPER_SCALE[3],
     Float:CAMPER_ORIGIN[3],
     Float:CAMPER_CORNERS[24],
     Float:CAMPER_MINS[3],
-    Float:CAMPER_MAXS[3],
-    Float:CAMPER_NEXT_ENABLE,
-    Float:CAMPER_NEXT_DISABLE
+    Float:CAMPER_MAXS[3]
 }
 
 enum _:PLAYER_DATA
@@ -198,22 +186,54 @@ enum _:PLAYER_DATA
 
 enum
 {
+    SOUND_MENU_NAV,
+    SOUND_MENU_REMOVE,
+    SOUND_MENU_ALERT
+}
+
+enum
+{
     MENU_ROOT,
     MENU_CREATE,
-    MENU_STATUS,
+    MENU_EDIT,
     MENU_REMOVE,
+    MENU_STATUS,
     MENU_SCALE
 }
 
 enum
 {
     ROOT_CREATE,
-    ROOT_STATUS,
+    ROOT_EDIT,
     ROOT_REMOVE,
     ROOT_SAVE,
 
     ROOT_NOCLIP = 5,
     ROOT_GODMODE
+}
+
+enum
+{
+    EDIT_STATUS
+}
+
+enum
+{
+    REMOVE_NEXT,
+    REMOVE_BACK,
+
+    REMOVE_CURRENT = 3,
+    REMOVE_ALL
+}
+
+enum
+{
+    STATUS_NEXT,
+    STATUS_BACK,
+
+    STATUS_CURRENT = 3,
+    STATUS_ALL_ENABLE,
+    STATUS_ALL_DISABLE
 }
 
 enum
@@ -246,46 +266,45 @@ enum
     SCALE_PLACE
 }
 
-new g_szMenuHandler[][] =
+new g_szMenuHandler[][MAX_VALUE_LENGTH] =
 {
     "menuHandlerRoot",
     "menuHandlerCreate",
-    "menuHandlerStatus",
+    "menuHandlerEdit",
     "menuHandlerRemove",
+    "menuHandlerStatus",
     "menuHandlerScale"
 }
 
-new Float:g_fScaleFactor[] = {5.0, 10.0, 20.0, 30.0, 45.0, 60.0}
+new const g_iColorActive[] = { 0, 255, 0 }
+new const g_iColorInactive[] = { 255, 0, 0 }
+new Float:g_fScaleFactor[] = { 5.0, 10.0, 20.0, 30.0, 45.0, 60.0 }
 new g_szCN[] = "camperzone"
 
 new Array:g_aCamper, Array:g_aCamperConfig,
     g_eSettings[MAIN_SETTINGS],
     g_ePlayerData[MAX_PLAYERS + 1][PLAYER_DATA],
-    bool:g_bFileWasRead = false,
+    bool:g_bFileWasRead, g_iActivePlayers,
+    HamHook:g_iFwdPreThink, HamHook:g_iFwdKilled,
     g_iCamper, g_iCamperConfig,
     g_iMaxPlayers
 
 public plugin_init()
 {
     register_plugin("Camper Zone", PLUGIN_VERSION, "RedSMURF")
+    register_cvar("RedSMURF_CamperZone", PLUGIN_VERSION, ADMIN_ACCESS)
 
     register_clcmd("say /cz",      "cmdMenu", ADMIN_ACCESS, "-- Opens the Camper Zone menu.")
     register_clcmd("say_team /cz", "cmdMenu", ADMIN_ACCESS, "-- Opens the Camper Zone menu.")
     register_concmd("cz_reload",   "cmdReload", ADMIN_ACCESS, "-- Reload the configuration file")
-
     register_dictionary("CamperZone.txt")
 
-    register_forward(FM_UpdateClientData, "fwdUpdateClientData", 1)
-    register_forward(FM_AddToFullPack, "fwdAddToFullPack", 1)
-    RegisterHam(Ham_Spawn, "info_target", "fwdSpawn", 1)
-    RegisterHam(Ham_Player_PreThink, "player", "fwdPreThink")
-    RegisterHam(Ham_Killed, "player", "fwdKilled", 1)
+    g_iFwdPreThink = RegisterHam(Ham_Player_PreThink, "player", "fwdPreThink")
+    g_iFwdKilled = RegisterHam(Ham_Killed, "player", "fwdKilled", 1)
+    DisableForward()
 
-    g_iMaxPlayers = get_maxplayers()
-
-    register_logevent("eventRoundStart", 2, "1=Round_Start")
-    set_task(0.1, "camperTask", .flags = "b")
     camperInit()
+    g_iMaxPlayers = get_maxplayers()
 }
 
 public plugin_precache()
@@ -328,34 +347,8 @@ public cmdReload(id, iLevel, iCmd)
 
 public eventRoundStart()
 {
-    if ( !g_iCamper )
-        return PLUGIN_HANDLED
-
-    new eCamper[CAMPER], Float:fCurrentTime
-    fCurrentTime = get_gametime()
-
-    for ( new i = 1; i <= g_iMaxPlayers; i ++ )
-        camperResetPlayer(i)
-
-    for ( new i = 0; i < g_iCamper; i ++ )
-    {
-        ArrayGetArray(g_aCamper, i, eCamper)
-        if ( !(eCamper[CAMPER_FLAGS] & FLAG_ACTIVE) )
-            continue
-
-        camperReset(eCamper)
-        if ( g_eSettings[SETTING_DEFAULT_ACTIVE_CHANCE] >= random_float(0.0, 1.0) )
-        {
-            if ( eCamper[CAMPER_FLAGS] & FLAG_ACTIVE_DELAY )
-                eCamper[CAMPER_NEXT_ENABLE] = fCurrentTime + random_float(g_eSettings[SETTING_DEFAULT_ACTIVE_DELAY][0], g_eSettings[SETTING_DEFAULT_ACTIVE_DELAY][1])
-            else
-                eCamper[CAMPER_FLAGS] |= FLAG_ACTIVE
-        }
-
-        ArraySetArray(g_aCamper, i, eCamper)
-    }
-
-    return PLUGIN_HANDLED
+    for ( new id = 1; id <= g_iMaxPlayers; id ++ )
+        camperResetPlayer(id)
 }
 
 ReadFile()
@@ -366,18 +359,6 @@ ReadFile()
         for ( new id = 1; id <= g_iMaxPlayers; id ++ )
             if ( is_user_connected(id) )
                 UpdateData(id)
-
-        for ( new i = 0; i < g_iCamper; i ++ )
-        {
-            ArrayGetArray(g_aCamper, i, eCamper)
-            ArrayDestroy(eCamper[CAMPER_WARNING_MESSAGE])
-        }
-
-        for ( new i = 0; i < g_iCamperConfig; i ++ )
-        {
-            ArrayGetArray(g_aCamperConfig, i, eCamper)
-            ArrayDestroy(eCamper[CAMPER_WARNING_MESSAGE])
-        }
 
         ArrayClear(g_eSettings[SETTING_DEFAULT_WARNING_MESSAGE])
         ArrayClear(g_aCamperConfig)
@@ -448,13 +429,7 @@ ReadFile()
                         eCamper[CAMPER_DAMAGE_RESET_DELAY]          = g_eSettings[SETTING_DEFAULT_DAMAGE_RESET_DELAY]
                         eCamper[CAMPER_DAMAGE_MULTIPLIER_DELAY]     = g_eSettings[SETTING_DEFAULT_DAMAGE_MULTIPLIER_DELAY]
                         eCamper[CAMPER_DAMAGE_MULTIPLIER]           = g_eSettings[SETTING_DEFAULT_DAMAGE_MULTIPLIER]
-                        eCamper[CAMPER_ACTIVE_CHANCE]               = g_eSettings[SETTING_DEFAULT_ACTIVE_CHANCE]
-                        eCamper[CAMPER_ACTIVE_DELAY][0]             = g_eSettings[SETTING_DEFAULT_ACTIVE_DELAY][0]
-                        eCamper[CAMPER_ACTIVE_DELAY][1]             = g_eSettings[SETTING_DEFAULT_ACTIVE_DELAY][1]
-                        eCamper[CAMPER_ACTIVE_DURATION][0]          = g_eSettings[SETTING_DEFAULT_ACTIVE_DURATION][0]
-                        eCamper[CAMPER_ACTIVE_DURATION][1]          = g_eSettings[SETTING_DEFAULT_ACTIVE_DURATION][1]
-                        eCamper[CAMPER_ACTIVE_COOLDOWN][0]          = g_eSettings[SETTING_DEFAULT_ACTIVE_COOLDOWN][0]
-                        eCamper[CAMPER_ACTIVE_COOLDOWN][1]          = g_eSettings[SETTING_DEFAULT_ACTIVE_COOLDOWN][1]
+                        eCamper[CAMPER_DAMAGETYPE]                  = g_eSettings[SETTING_DEFAULT_DAMAGETYPE]
 
                         iSection = SECTION_CAMPER
                         g_iCamperConfig ++
@@ -493,107 +468,85 @@ ReadFile()
                         trim(szValue)
 
                         if ( equali(szKey, "SETTING_DEFAULT_MODEL") )
-                            parseSetting(DTYPE_STRING_MODEL, szKey, charsmax(szKey), szValue, charsmax(szValue), g_eSettings[SETTING_DEFAULT_MODEL], charsmax(g_eSettings[SETTING_DEFAULT_MODEL]))
+                            parseSetting(DTYPE_STRING_MODEL, szValue, charsmax(szValue), g_eSettings[SETTING_DEFAULT_MODEL], charsmax(g_eSettings[SETTING_DEFAULT_MODEL]))
                         else if ( equali(szKey, "SETTING_DEFAULT_FLAGS") )
-                            parseSetting(DTYPE_FLAGS, szKey, charsmax(szKey), szValue, charsmax(szValue), g_eSettings[SETTING_DEFAULT_FLAGS], charsmax(g_eSettings[SETTING_DEFAULT_FLAGS]))
+                            parseSetting(DTYPE_FLAGS, szValue, charsmax(szValue), g_eSettings[SETTING_DEFAULT_FLAGS], charsmax(g_eSettings[SETTING_DEFAULT_FLAGS]))
                         else if ( equali(szKey, "SETTING_DEFAULT_TEAM") )
-                            parseSetting(DTYPE_INT, szKey, charsmax(szKey), szValue, charsmax(szValue), g_eSettings[SETTING_DEFAULT_TEAM], charsmax(g_eSettings[SETTING_DEFAULT_TEAM]))
+                            parseSetting(DTYPE_INT, szValue, charsmax(szValue), g_eSettings[SETTING_DEFAULT_TEAM], charsmax(g_eSettings[SETTING_DEFAULT_TEAM]))
                         else if ( equali(szKey, "SETTING_DEFAULT_WARNING_DELAY") )
-                            parseSetting(DTYPE_FLOAT, szKey, charsmax(szKey), szValue, charsmax(szValue), g_eSettings[SETTING_DEFAULT_WARNING_DELAY], charsmax(g_eSettings[SETTING_DEFAULT_WARNING_DELAY]))
+                            parseSetting(DTYPE_FLOAT, szValue, charsmax(szValue), g_eSettings[SETTING_DEFAULT_WARNING_DELAY], charsmax(g_eSettings[SETTING_DEFAULT_WARNING_DELAY]))
                         else if ( equali(szKey, "SETTING_DEFAULT_WARNING_COOLDOWN") )
-                            parseSetting(DTYPE_FLOAT_RANGE, szKey, charsmax(szKey), szValue, charsmax(szValue), g_eSettings[SETTING_DEFAULT_WARNING_COOLDOWN], charsmax(g_eSettings[SETTING_DEFAULT_WARNING_COOLDOWN]))
+                            parseSetting(DTYPE_FLOAT, szValue, charsmax(szValue), g_eSettings[SETTING_DEFAULT_WARNING_COOLDOWN], charsmax(g_eSettings[SETTING_DEFAULT_WARNING_COOLDOWN]))
                         else if ( equali(szKey, "SETTING_DEFAULT_WARNING_MESSAGE") )
                         {
-                            parseSetting(DTYPE_ARRAY, szKey, charsmax(szKey), szValue, charsmax(szValue), g_eSettings[SETTING_DEFAULT_WARNING_MESSAGE], charsmax(g_eSettings[SETTING_DEFAULT_WARNING_MESSAGE]))
+                            parseSetting(DTYPE_ARRAY_STRING, szValue, charsmax(szValue), g_eSettings[SETTING_DEFAULT_WARNING_MESSAGE], charsmax(g_eSettings[SETTING_DEFAULT_WARNING_MESSAGE]))
                             g_eSettings[SETTING_DEFAULT_WARNING_MESSAGE_COUNT] ++
                         }
                         else if ( equali(szKey, "SETTING_DEFAULT_DAMAGE") )
-                            parseSetting(DTYPE_FLOAT_RANGE, szKey, charsmax(szKey), szValue, charsmax(szValue), g_eSettings[SETTING_DEFAULT_DAMAGE], charsmax(g_eSettings[SETTING_DEFAULT_DAMAGE]))
+                            parseSetting(DTYPE_FLOAT, szValue, charsmax(szValue), g_eSettings[SETTING_DEFAULT_DAMAGE], charsmax(g_eSettings[SETTING_DEFAULT_DAMAGE]))
                         else if ( equali(szKey, "SETTING_DEFAULT_DAMAGE_TICK") )
-                            parseSetting(DTYPE_FLOAT_RANGE, szKey, charsmax(szKey), szValue, charsmax(szValue), g_eSettings[SETTING_DEFAULT_DAMAGE_TICK], charsmax(g_eSettings[SETTING_DEFAULT_DAMAGE_TICK]))
+                            parseSetting(DTYPE_FLOAT, szValue, charsmax(szValue), g_eSettings[SETTING_DEFAULT_DAMAGE_TICK], charsmax(g_eSettings[SETTING_DEFAULT_DAMAGE_TICK]))
                         else if ( equali(szKey, "SETTING_DEFAULT_DAMAGE_DELAY") )
-                            parseSetting(DTYPE_FLOAT, szKey, charsmax(szKey), szValue, charsmax(szValue), g_eSettings[SETTING_DEFAULT_DAMAGE_DELAY], charsmax(g_eSettings[SETTING_DEFAULT_DAMAGE_DELAY]))
+                            parseSetting(DTYPE_FLOAT, szValue, charsmax(szValue), g_eSettings[SETTING_DEFAULT_DAMAGE_DELAY], charsmax(g_eSettings[SETTING_DEFAULT_DAMAGE_DELAY]))
                         else if ( equali(szKey, "SETTING_DEFAULT_DAMAGE_RESET_DELAY") )
-                            parseSetting(DTYPE_FLOAT, szKey, charsmax(szKey), szValue, charsmax(szValue), g_eSettings[SETTING_DEFAULT_DAMAGE_RESET_DELAY], charsmax(g_eSettings[SETTING_DEFAULT_DAMAGE_RESET_DELAY]))
+                            parseSetting(DTYPE_FLOAT, szValue, charsmax(szValue), g_eSettings[SETTING_DEFAULT_DAMAGE_RESET_DELAY], charsmax(g_eSettings[SETTING_DEFAULT_DAMAGE_RESET_DELAY]))
                         else if ( equali(szKey, "SETTING_DEFAULT_DAMAGE_MULTIPLIER_DELAY") )
-                            parseSetting(DTYPE_FLOAT, szKey, charsmax(szKey), szValue, charsmax(szValue), g_eSettings[SETTING_DEFAULT_DAMAGE_MULTIPLIER_DELAY], charsmax(g_eSettings[SETTING_DEFAULT_DAMAGE_MULTIPLIER_DELAY]))
+                            parseSetting(DTYPE_FLOAT, szValue, charsmax(szValue), g_eSettings[SETTING_DEFAULT_DAMAGE_MULTIPLIER_DELAY], charsmax(g_eSettings[SETTING_DEFAULT_DAMAGE_MULTIPLIER_DELAY]))
                         else if ( equali(szKey, "SETTING_DEFAULT_DAMAGE_MULTIPLIER") )
-                            parseSetting(DTYPE_FLOAT, szKey, charsmax(szKey), szValue, charsmax(szValue), g_eSettings[SETTING_DEFAULT_DAMAGE_MULTIPLIER], charsmax(g_eSettings[SETTING_DEFAULT_DAMAGE_MULTIPLIER]))
-                        else if ( equali(szKey, "SETTING_DEFAULT_ACTIVE_CHANCE") )
-                            parseSetting(DTYPE_FLOAT, szKey, charsmax(szKey), szValue, charsmax(szValue), g_eSettings[SETTING_DEFAULT_ACTIVE_CHANCE], charsmax(g_eSettings[SETTING_DEFAULT_ACTIVE_CHANCE]))
-                        else if ( equali(szKey, "SETTING_DEFAULT_ACTIVE_DELAY") )
-                            parseSetting(DTYPE_FLOAT_RANGE, szKey, charsmax(szKey), szValue, charsmax(szValue), g_eSettings[SETTING_DEFAULT_ACTIVE_DELAY], charsmax(g_eSettings[SETTING_DEFAULT_ACTIVE_DELAY]))
-                        else if ( equali(szKey, "SETTING_DEFAULT_ACTIVE_DURATION") )
-                            parseSetting(DTYPE_FLOAT_RANGE, szKey, charsmax(szKey), szValue, charsmax(szValue), g_eSettings[SETTING_DEFAULT_ACTIVE_DURATION], charsmax(g_eSettings[SETTING_DEFAULT_ACTIVE_DURATION]))
-                        else if ( equali(szKey, "SETTING_DEFAULT_ACTIVE_COOLDOWN") )
-                            parseSetting(DTYPE_FLOAT_RANGE, szKey, charsmax(szKey), szValue, charsmax(szValue), g_eSettings[SETTING_DEFAULT_ACTIVE_COOLDOWN], charsmax(g_eSettings[SETTING_DEFAULT_ACTIVE_COOLDOWN]))
+                            parseSetting(DTYPE_FLOAT, szValue, charsmax(szValue), g_eSettings[SETTING_DEFAULT_DAMAGE_MULTIPLIER], charsmax(g_eSettings[SETTING_DEFAULT_DAMAGE_MULTIPLIER]))
+                        else if ( equali(szKey, "SETTING_DEFAULT_DAMAGETYPE") )
+                            parseSetting(DTYPE_INT, szValue, charsmax(szValue), g_eSettings[SETTING_DEFAULT_DAMAGETYPE], charsmax(g_eSettings[SETTING_DEFAULT_DAMAGETYPE]))
                         else if ( equali(szKey, "SETTING_CAMPER_LOAD") )
-                            parseSetting(DTYPE_BOOL, szKey, charsmax(szKey), szValue, charsmax(szValue), g_eSettings[SETTING_CAMPER_LOAD], charsmax(g_eSettings[SETTING_CAMPER_LOAD]))
+                            parseSetting(DTYPE_INT, szValue, charsmax(szValue), g_eSettings[SETTING_CAMPER_LOAD], charsmax(g_eSettings[SETTING_CAMPER_LOAD]))
                         else if ( equali(szKey, "SETTING_CAMPER_CHECK") )
-                            parseSetting(DTYPE_FLOAT, szKey, charsmax(szKey), szValue, charsmax(szValue), g_eSettings[SETTING_CAMPER_CHECK], charsmax(g_eSettings[SETTING_CAMPER_CHECK]))
+                            parseSetting(DTYPE_FLOAT, szValue, charsmax(szValue), g_eSettings[SETTING_CAMPER_CHECK], charsmax(g_eSettings[SETTING_CAMPER_CHECK]))
+                        else if ( equali(szKey, "SETTING_CAMPER_TASK") )
+                            parseSetting(DTYPE_FLOAT, szValue, charsmax(szValue), g_eSettings[SETTING_CAMPER_TASK], charsmax(g_eSettings[SETTING_CAMPER_TASK]))
                         else if ( equali(szKey, "SETTING_OFFSET_BASE") )
-                            parseSetting(DTYPE_FLOAT, szKey, charsmax(szKey), szValue, charsmax(szValue), g_eSettings[SETTING_OFFSET_BASE], charsmax(g_eSettings[SETTING_OFFSET_BASE]))
+                            parseSetting(DTYPE_FLOAT, szValue, charsmax(szValue), g_eSettings[SETTING_OFFSET_BASE], charsmax(g_eSettings[SETTING_OFFSET_BASE]))
                         else if ( equali(szKey, "SETTING_OFFSET") )
-                            parseSetting(DTYPE_FLOAT_RANGE, szKey, charsmax(szKey), szValue, charsmax(szValue), g_eSettings[SETTING_OFFSET], charsmax(g_eSettings[SETTING_OFFSET]))
+                            parseSetting(DTYPE_FLOAT, szValue, charsmax(szValue), g_eSettings[SETTING_OFFSET], charsmax(g_eSettings[SETTING_OFFSET]))
                         else if ( equali(szKey, "SETTING_OFFSET_STEP") )
-                            parseSetting(DTYPE_FLOAT, szKey, charsmax(szKey), szValue, charsmax(szValue), g_eSettings[SETTING_OFFSET_STEP], charsmax(g_eSettings[SETTING_OFFSET_STEP]))
+                            parseSetting(DTYPE_FLOAT, szValue, charsmax(szValue), g_eSettings[SETTING_OFFSET_STEP], charsmax(g_eSettings[SETTING_OFFSET_STEP]))
                         else if ( equali(szKey, "SETTING_GHOST_ALPHA") )
-                            parseSetting(DTYPE_INT, szKey, charsmax(szKey), szValue, charsmax(szValue), g_eSettings[SETTING_GHOST_ALPHA], charsmax(g_eSettings[SETTING_GHOST_ALPHA]))
+                            parseSetting(DTYPE_INT, szValue, charsmax(szValue), g_eSettings[SETTING_GHOST_ALPHA], charsmax(g_eSettings[SETTING_GHOST_ALPHA]))
                         else if ( equali(szKey, "SETTING_SIZE_BASE") )
-                            parseSetting(DTYPE_FLOAT, szKey, charsmax(szKey), szValue, charsmax(szValue), g_eSettings[SETTING_SIZE_BASE], charsmax(g_eSettings[SETTING_SIZE_BASE]))
+                            parseSetting(DTYPE_FLOAT, szValue, charsmax(szValue), g_eSettings[SETTING_SIZE_BASE], charsmax(g_eSettings[SETTING_SIZE_BASE]))
                         else if ( equali(szKey, "SETTING_SIZE_HEIGHT") )
-                            parseSetting(DTYPE_FLOAT_RANGE, szKey, charsmax(szKey), szValue, charsmax(szValue), g_eSettings[SETTING_SIZE_HEIGHT], charsmax(g_eSettings[SETTING_SIZE_HEIGHT]))
+                            parseSetting(DTYPE_FLOAT, szValue, charsmax(szValue), g_eSettings[SETTING_SIZE_HEIGHT], charsmax(g_eSettings[SETTING_SIZE_HEIGHT]))
                         else if ( equali(szKey, "SETTING_SIZE_WIDTH") )
-                            parseSetting(DTYPE_FLOAT_RANGE, szKey, charsmax(szKey), szValue, charsmax(szValue), g_eSettings[SETTING_SIZE_WIDTH], charsmax(g_eSettings[SETTING_SIZE_WIDTH]))
+                            parseSetting(DTYPE_FLOAT, szValue, charsmax(szValue), g_eSettings[SETTING_SIZE_WIDTH], charsmax(g_eSettings[SETTING_SIZE_WIDTH]))
                         else if ( equali(szKey, "SETTING_SIZE_DEPTH") )
-                            parseSetting(DTYPE_FLOAT_RANGE, szKey, charsmax(szKey), szValue, charsmax(szValue), g_eSettings[SETTING_SIZE_DEPTH], charsmax(g_eSettings[SETTING_SIZE_DEPTH]))
-                        else if ( equali(szKey, "SETTING_SOUND_MENU_NAV") )
-                            parseSetting(DTYPE_STRING_SOUND, szKey, charsmax(szKey), szValue, charsmax(szValue), g_eSettings[SETTING_SOUND_MENU_NAV], charsmax(g_eSettings[SETTING_SOUND_MENU_NAV]))
-                        else if ( equali(szKey, "SETTING_SOUND_MENU_REMOVE") )
-                            parseSetting(DTYPE_STRING_SOUND, szKey, charsmax(szKey), szValue, charsmax(szValue), g_eSettings[SETTING_SOUND_MENU_REMOVE], charsmax(g_eSettings[SETTING_SOUND_MENU_REMOVE]))
-                        else if ( equali(szKey, "SETTING_SOUND_MENU_ALERT") )
-                            parseSetting(DTYPE_STRING_SOUND, szKey, charsmax(szKey), szValue, charsmax(szValue), g_eSettings[SETTING_SOUND_MENU_ALERT], charsmax(g_eSettings[SETTING_SOUND_MENU_ALERT]))
+                            parseSetting(DTYPE_FLOAT, szValue, charsmax(szValue), g_eSettings[SETTING_SIZE_DEPTH], charsmax(g_eSettings[SETTING_SIZE_DEPTH]))
                         else if ( equali(szKey, "SETTING_BEAM") )
-                            parseSetting(DTYPE_STRING_SPRITE, szKey, charsmax(szKey), szValue, charsmax(szValue), g_eSettings[SETTING_BEAM], charsmax(g_eSettings[SETTING_BEAM]))
+                            parseSetting(DTYPE_STRING_MODEL_ID, szValue, charsmax(szValue), g_eSettings[SETTING_BEAM], charsmax(g_eSettings[SETTING_BEAM]))
                         else if ( equali(szKey, "SETTING_BEAM_WIDTH") )
-                            parseSetting(DTYPE_INT, szKey, charsmax(szKey), szValue, charsmax(szValue), g_eSettings[SETTING_BEAM_WIDTH], charsmax(g_eSettings[SETTING_BEAM_WIDTH]))
+                            parseSetting(DTYPE_INT, szValue, charsmax(szValue), g_eSettings[SETTING_BEAM_WIDTH], charsmax(g_eSettings[SETTING_BEAM_WIDTH]))
                         else if ( equali(szKey, "SETTING_BEAM_ALPHA") )
-                            parseSetting(DTYPE_INT, szKey, charsmax(szKey), szValue, charsmax(szValue), g_eSettings[SETTING_BEAM_ALPHA], charsmax(g_eSettings[SETTING_BEAM_ALPHA]))
-                        else if ( equali(szKey, "SETTING_COLOR_ACTIVE") )
-                            parseSetting(DTYPE_VECTOR, szKey, charsmax(szKey), szValue, charsmax(szValue), g_eSettings[SETTING_COLOR_ACTIVE], charsmax(g_eSettings[SETTING_COLOR_ACTIVE]))
-                        else if ( equali(szKey, "SETTING_COLOR_INACTIVE") )
-                            parseSetting(DTYPE_VECTOR, szKey, charsmax(szKey), szValue, charsmax(szValue), g_eSettings[SETTING_COLOR_INACTIVE], charsmax(g_eSettings[SETTING_COLOR_INACTIVE]))
+                            parseSetting(DTYPE_INT, szValue, charsmax(szValue), g_eSettings[SETTING_BEAM_ALPHA], charsmax(g_eSettings[SETTING_BEAM_ALPHA]))
                     }
                     case SECTION_CAMPER:
                     {
                         if ( equali(szKey, "CAMPER_FLAGS") )
-                            parseSetting(DTYPE_FLAGS, szKey, charsmax(szKey), szValue, charsmax(szValue), eCamper[CAMPER_FLAGS], charsmax(eCamper[CAMPER_FLAGS]), g_eSettings[SETTING_DEFAULT_FLAGS])
+                            parseSetting(DTYPE_FLAGS, szValue, charsmax(szValue), eCamper[CAMPER_FLAGS], charsmax(eCamper[CAMPER_FLAGS]))
                         else if ( equali(szKey, "CAMPER_TEAM") )
-                            parseSetting(DTYPE_INT, szKey, charsmax(szKey), szValue, charsmax(szValue), eCamper[CAMPER_TEAM], charsmax(eCamper[CAMPER_TEAM]), g_eSettings[SETTING_DEFAULT_TEAM])
+                            parseSetting(DTYPE_INT, szValue, charsmax(szValue), eCamper[CAMPER_TEAM], charsmax(eCamper[CAMPER_TEAM]))
                         else if ( equali(szKey, "CAMPER_DAMAGE") )
-                            parseSetting(DTYPE_FLOAT_RANGE, szKey, charsmax(szKey), szValue, charsmax(szValue), eCamper[CAMPER_DAMAGE], charsmax(eCamper[CAMPER_DAMAGE]), g_eSettings[SETTING_DEFAULT_DAMAGE])
+                            parseSetting(DTYPE_FLOAT, szValue, charsmax(szValue), eCamper[CAMPER_DAMAGE], charsmax(eCamper[CAMPER_DAMAGE]))
                         else if ( equali(szKey, "CAMPER_DAMAGE_TICK") )
-                            parseSetting(DTYPE_FLOAT_RANGE, szKey, charsmax(szKey), szValue, charsmax(szValue), eCamper[CAMPER_DAMAGE_TICK], charsmax(eCamper[CAMPER_DAMAGE_TICK]), g_eSettings[SETTING_DEFAULT_DAMAGE_TICK])
+                            parseSetting(DTYPE_FLOAT, szValue, charsmax(szValue), eCamper[CAMPER_DAMAGE_TICK], charsmax(eCamper[CAMPER_DAMAGE_TICK]))
                         else if ( equali(szKey, "CAMPER_DAMAGE_DELAY") )
-                            parseSetting(DTYPE_FLOAT, szKey, charsmax(szKey), szValue, charsmax(szValue), eCamper[CAMPER_DAMAGE_DELAY], charsmax(eCamper[CAMPER_DAMAGE_DELAY]), g_eSettings[SETTING_DEFAULT_DAMAGE_DELAY])
+                            parseSetting(DTYPE_FLOAT, szValue, charsmax(szValue), eCamper[CAMPER_DAMAGE_DELAY], charsmax(eCamper[CAMPER_DAMAGE_DELAY]))
                         else if ( equali(szKey, "CAMPER_DAMAGE_RESET_DELAY") )
-                            parseSetting(DTYPE_FLOAT, szKey, charsmax(szKey), szValue, charsmax(szValue), eCamper[CAMPER_DAMAGE_RESET_DELAY], charsmax(eCamper[CAMPER_DAMAGE_RESET_DELAY]), g_eSettings[SETTING_DEFAULT_DAMAGE_RESET_DELAY])
+                            parseSetting(DTYPE_FLOAT, szValue, charsmax(szValue), eCamper[CAMPER_DAMAGE_RESET_DELAY], charsmax(eCamper[CAMPER_DAMAGE_RESET_DELAY]))
                         else if ( equali(szKey, "CAMPER_DAMAGE_MULTIPLIER_DELAY") )
-                            parseSetting(DTYPE_FLOAT, szKey, charsmax(szKey), szValue, charsmax(szValue), eCamper[CAMPER_DAMAGE_MULTIPLIER_DELAY], charsmax(eCamper[CAMPER_DAMAGE_MULTIPLIER_DELAY]), g_eSettings[SETTING_DEFAULT_DAMAGE_MULTIPLIER_DELAY])
+                            parseSetting(DTYPE_FLOAT, szValue, charsmax(szValue), eCamper[CAMPER_DAMAGE_MULTIPLIER_DELAY], charsmax(eCamper[CAMPER_DAMAGE_MULTIPLIER_DELAY]))
                         else if ( equali(szKey, "CAMPER_DAMAGE_MULTIPLIER") )
-                            parseSetting(DTYPE_FLOAT, szKey, charsmax(szKey), szValue, charsmax(szValue), eCamper[CAMPER_DAMAGE_MULTIPLIER], charsmax(eCamper[CAMPER_DAMAGE_MULTIPLIER]), g_eSettings[SETTING_DEFAULT_DAMAGE_MULTIPLIER])
-                        else if ( equali(szKey, "CAMPER_ACTIVE_CHANCE") )
-                            parseSetting(DTYPE_FLOAT, szKey, charsmax(szKey), szValue, charsmax(szValue), eCamper[CAMPER_ACTIVE_CHANCE], charsmax(eCamper[CAMPER_ACTIVE_CHANCE]), g_eSettings[SETTING_DEFAULT_ACTIVE_CHANCE])
-                        else if ( equali(szKey, "CAMPER_ACTIVE_DELAY") )
-                            parseSetting(DTYPE_FLOAT_RANGE, szKey, charsmax(szKey), szValue, charsmax(szValue), eCamper[CAMPER_ACTIVE_DELAY], charsmax(eCamper[CAMPER_ACTIVE_DELAY]), g_eSettings[SETTING_DEFAULT_ACTIVE_DELAY])
-                        else if ( equali(szKey, "CAMPER_ACTIVE_DURATION") )
-                            parseSetting(DTYPE_FLOAT_RANGE, szKey, charsmax(szKey), szValue, charsmax(szValue), eCamper[CAMPER_ACTIVE_DURATION], charsmax(eCamper[CAMPER_ACTIVE_DURATION]), g_eSettings[SETTING_DEFAULT_ACTIVE_DURATION])
-                        else if ( equali(szKey, "CAMPER_ACTIVE_COOLDOWN") )
-                            parseSetting(DTYPE_FLOAT_RANGE, szKey, charsmax(szKey), szValue, charsmax(szValue), eCamper[CAMPER_ACTIVE_COOLDOWN], charsmax(eCamper[CAMPER_ACTIVE_COOLDOWN]), g_eSettings[SETTING_DEFAULT_ACTIVE_COOLDOWN])
+                            parseSetting(DTYPE_FLOAT, szValue, charsmax(szValue), eCamper[CAMPER_DAMAGE_MULTIPLIER], charsmax(eCamper[CAMPER_DAMAGE_MULTIPLIER]))
                         else if ( equali(szKey, "CAMPER_WARNING_DELAY") )
-                            parseSetting(DTYPE_FLOAT, szKey, charsmax(szKey), szValue, charsmax(szValue), eCamper[CAMPER_WARNING_DELAY], charsmax(eCamper[CAMPER_WARNING_DELAY]), g_eSettings[SETTING_DEFAULT_WARNING_DELAY])
+                            parseSetting(DTYPE_FLOAT, szValue, charsmax(szValue), eCamper[CAMPER_WARNING_DELAY], charsmax(eCamper[CAMPER_WARNING_DELAY]))
                         else if ( equali(szKey, "CAMPER_WARNING_COOLDOWN") )
-                            parseSetting(DTYPE_FLOAT_RANGE, szKey, charsmax(szKey), szValue, charsmax(szValue), eCamper[CAMPER_WARNING_COOLDOWN], charsmax(eCamper[CAMPER_WARNING_COOLDOWN]), g_eSettings[SETTING_DEFAULT_WARNING_COOLDOWN])
+                            parseSetting(DTYPE_FLOAT, szValue, charsmax(szValue), eCamper[CAMPER_WARNING_COOLDOWN], charsmax(eCamper[CAMPER_WARNING_COOLDOWN]))
                         else if ( equali(szKey, "CAMPER_WARNING_MESSAGE") )
                         {
                             if ( !(eCamper[CAMPER_FLAGS] & FLAG_MESSAGE) )
@@ -604,9 +557,11 @@ ReadFile()
                                 eCamper[CAMPER_WARNING_MESSAGE_COUNT] = 0
                             }
 
-                            parseSetting(DTYPE_ARRAY, szKey, charsmax(szKey), szValue, charsmax(szValue), eCamper[CAMPER_WARNING_MESSAGE], charsmax(eCamper[CAMPER_WARNING_MESSAGE]), g_eSettings[SETTING_DEFAULT_WARNING_MESSAGE])
+                            parseSetting(DTYPE_ARRAY_STRING, szValue, charsmax(szValue), eCamper[CAMPER_WARNING_MESSAGE], charsmax(eCamper[CAMPER_WARNING_MESSAGE]))
                             eCamper[CAMPER_WARNING_MESSAGE_COUNT] ++
                         }
+                        else if ( equali(szKey, "CAMPER_DAMAGETYPE") )
+                            parseSetting(DTYPE_INT, szValue, charsmax(szValue), eCamper[CAMPER_DAMAGETYPE], charsmax(eCamper[CAMPER_DAMAGETYPE]))
                     }
                 }
             }
@@ -630,15 +585,14 @@ public client_authorized(id)
 public client_disconnected(id)
 {
     new eCamper[CAMPER], iItem
-    if ( g_ePlayerData[id][PDATA_CAMPER_GHOST]
-    && (iItem = camperGet(eCamper, g_ePlayerData[id][PDATA_CAMPER_GHOST])) != -1 )
+    if ((iItem = camperGet(eCamper, g_ePlayerData[id][PDATA_CAMPER_GHOST])) != -1 )
     {
         camperKill(eCamper[CAMPER_ID])
         camperRemove(iItem)
     }
 
+    DisableAction(id)
     g_ePlayerData[id][PDATA_CAMPER_GHOST]   = 0
-    g_ePlayerData[id][PDATA_CAMPER_ACTION]  = false
     g_ePlayerData[id][PDATA_CAMPER_MENU]    = 0
 }
 
@@ -650,25 +604,36 @@ public UpdateData(id)
 public camperInit()
 {
     if ( g_eSettings[SETTING_CAMPER_LOAD] )
-        loadData()
+        set_task(DELAY_ON_LOAD, "loadData")
 }
 
-public camperMenu(id, iType)
+stock camperTerminate()
+{
+    new eCamper[CAMPER]
+    for ( new i = 0; i < g_iCamper; i ++ )
+    {
+        ArrayGetArray(g_aCamper, i, eCamper)
+        eCamper[CAMPER_FLAGS] &= ~FLAG_SELECT
+        ArraySetArray(g_aCamper, i, eCamper)
+    }
+}
+
+stock camperMenu(id, iType)
 {
     if ( !is_user_connected(id) )
         return PLUGIN_HANDLED
 
-    new szData[64], iMenu
+    new szData[256], iMenu
     formatex(szData, charsmax(szData), "%L", id, "CAMPER_MENU_TITLE", PLUGIN_VERSION)
     iMenu = menu_create(szData, g_szMenuHandler[iType])
-
     switch( iType )
     {
-        case MENU_ROOT:   { menuRoot(id, iMenu); }
-        case MENU_CREATE: { menuCreate(id, iMenu);  format(szData, charsmax(szData), "%s^n%L", szData, id, "CAMPER_ROOT_CREATE"); }
-        case MENU_STATUS: { menuStatus(id, iMenu);  format(szData, charsmax(szData), "%s^n%L", szData, id, "CAMPER_ROOT_STATUS"); }
-        case MENU_REMOVE: { menuRemove(id, iMenu);  format(szData, charsmax(szData), "%s^n%L", szData, id, "CAMPER_ROOT_REMOVE"); }
-        case MENU_SCALE:  { menuScale(id, iMenu);   format(szData, charsmax(szData), "%s^n%L", szData, id, "CAMPER_ROOT_SCALE"); }
+        case MENU_ROOT:         { menuRoot(id, iMenu); }
+        case MENU_CREATE:       { menuCreate(iMenu);            format(szData, charsmax(szData), "%s^n%L", szData, id, "CAMPER_ROOT_CREATE"); }
+        case MENU_EDIT:         { menuEdit(id, iMenu);          format(szData, charsmax(szData), "%s^n%L", szData, id, "CAMPER_ROOT_EDIT"); }
+        case MENU_REMOVE:       { menuRemove(id, iMenu);        format(szData, charsmax(szData), "%s^n%L", szData, id, "CAMPER_ROOT_REMOVE"); }
+        case MENU_STATUS:       { menuStatus(id, iMenu);        format(szData, charsmax(szData), "%s^n%L", szData, id, "CAMPER_ROOT_STATUS"); }
+        case MENU_SCALE:        { menuScale(id, iMenu);         format(szData, charsmax(szData), "%s^n%L", szData, id, "CAMPER_ROOT_SCALE"); }
     }
 
     if ( menu_pages(iMenu) > 1 )
@@ -698,11 +663,10 @@ stock menuNav(id, iMenu)
 public menuRoot(id, iMenu)
 {
     new szItem[64]
-
     formatex(szItem, charsmax(szItem), "%L", id, "CAMPER_ROOT_CREATE")
     menu_additem(iMenu, szItem)
 
-    formatex(szItem, charsmax(szItem), "%L", id, "CAMPER_ROOT_STATUS")
+    formatex(szItem, charsmax(szItem), "%L", id, "CAMPER_ROOT_EDIT")
     menu_additem(iMenu, szItem)
 
     formatex(szItem, charsmax(szItem), "%L", id, "CAMPER_ROOT_REMOVE")
@@ -735,7 +699,9 @@ public menuHandlerRoot(id, menu, item)
             if ( g_iCamper >= MAX_ENT )
             {
                 client_print_color(id, id, "%L %L", id, "CAMPER_CHAT_TAG", id, "CAMPER_CHAT_LIMIT", MAX_ENT)
+
                 camperSound(id, SOUND_MENU_REMOVE)
+                camperMenu(id, MENU_ROOT)
             }
             else
             {
@@ -743,17 +709,19 @@ public menuHandlerRoot(id, menu, item)
                 camperMenu(id, MENU_CREATE)
             }
         }
-        case ROOT_STATUS:
+        case ROOT_EDIT:
         {
             if ( !g_iCamper )
             {
                 client_print_color(id, id, "%L %L", id, "CAMPER_CHAT_TAG", id, "CAMPER_CHAT_NO_CAMPER")
+
                 camperSound(id, SOUND_MENU_REMOVE)
+                camperMenu(id, MENU_ROOT)
             }
             else
             {
                 camperSound(id, SOUND_MENU_NAV)
-                camperMenu(id, MENU_STATUS)
+                camperMenu(id, MENU_EDIT)
             }
         }
         case ROOT_REMOVE:
@@ -761,7 +729,9 @@ public menuHandlerRoot(id, menu, item)
             if ( !g_iCamper )
             {
                 client_print_color(id, id, "%L %L", id, "CAMPER_CHAT_TAG", id, "CAMPER_CHAT_NO_CAMPER")
+
                 camperSound(id, SOUND_MENU_REMOVE)
+                camperMenu(id, MENU_ROOT)
             }
             else
             {
@@ -787,7 +757,7 @@ public menuHandlerRoot(id, menu, item)
     return PLUGIN_HANDLED
 }
 
-public menuCreate(id, iMenu)
+public menuCreate(iMenu)
 {
     new eCamper[CAMPER], szItem[64]
     for ( new i = 0; i < g_iCamperConfig; i ++ )
@@ -823,15 +793,141 @@ public menuHandlerCreate(id, menu, item)
     return PLUGIN_HANDLED
 }
 
+public menuEdit(id, iMenu)
+{
+    new szItem[64]
+    formatex(szItem, charsmax(szItem), "%L", id, "CAMPER_EDIT_STATUS")
+    menu_additem(iMenu, szItem)
+}
+
+public menuHandlerEdit(id, menu, item)
+{
+    switch( item )
+    {
+        case EDIT_STATUS:
+        {
+            camperSound(id, SOUND_MENU_NAV)
+            camperMenu(id, MENU_STATUS)
+        }
+        case MENU_EXIT:
+        {
+            camperSound(id, SOUND_MENU_NAV)
+            camperMenu(id, MENU_ROOT)
+        }
+    }
+
+    menu_destroy(menu)
+    return PLUGIN_HANDLED
+}
+
+public menuRemove(id, iMenu)
+{
+    new szItem[64], eCamper[CAMPER]
+    menuNav(id, iMenu)
+    ArrayGetArray(g_aCamper, g_ePlayerData[id][PDATA_CAMPER_MENU], eCamper)
+
+    formatex(szItem, charsmax(szItem), "%L", id, "CAMPER_REMOVE_CURRENT", eCamper[CAMPER_NAME])
+    menu_additem(iMenu, szItem)
+
+    formatex(szItem, charsmax(szItem), "%L", id, "CAMPER_REMOVE_ALL")
+    menu_additem(iMenu, szItem)
+
+    EnableAction(id)
+    camperSelect(eCamper, TARGET_SELECT)
+    g_ePlayerData[id][PDATA_MENU_TYPE] = MENU_REMOVE
+    ArraySetArray(g_aCamper, g_ePlayerData[id][PDATA_CAMPER_MENU], eCamper)
+}
+
+public menuHandlerRemove(id, menu, item)
+{
+    new eCamper[CAMPER]
+    ArrayGetArray(g_aCamper, g_ePlayerData[id][PDATA_CAMPER_MENU], eCamper)
+    if ( !g_ePlayerData[id][PDATA_MENU_TRACE] )
+    {
+        camperSelect(eCamper, eCamper[CAMPER_FLAGS] & FLAG_ACTIVE ? TARGET_HIDE : TARGET_GHOST)
+        ArraySetArray(g_aCamper, g_ePlayerData[id][PDATA_CAMPER_MENU], eCamper)
+    }
+
+    switch( item )
+    {
+        case REMOVE_NEXT:
+        {
+            if ( g_ePlayerData[id][PDATA_CAMPER_MENU] >= g_iCamper - 1 )
+                g_ePlayerData[id][PDATA_CAMPER_MENU] = 0
+            else
+                g_ePlayerData[id][PDATA_CAMPER_MENU] ++
+
+            camperSound(id, SOUND_MENU_NAV)
+            camperMenu(id, MENU_REMOVE)
+        }
+        case REMOVE_BACK:
+        {
+            if ( g_ePlayerData[id][PDATA_CAMPER_MENU] <= 0 )
+                g_ePlayerData[id][PDATA_CAMPER_MENU] = g_iCamper - 1
+            else
+                g_ePlayerData[id][PDATA_CAMPER_MENU] --
+
+            camperSound(id, SOUND_MENU_NAV)
+            camperMenu(id, MENU_REMOVE)
+        }
+        case REMOVE_CURRENT:
+        {
+            camperKill(eCamper[CAMPER_ID])
+            camperRemove(g_ePlayerData[id][PDATA_CAMPER_MENU])
+
+            client_print_color(id, id, "%L %L", id, "CAMPER_CHAT_TAG", id, "CAMPER_CHAT_REMOVE_CURRENT", eCamper[CAMPER_NAME])
+            g_ePlayerData[id][PDATA_CAMPER_MENU] = 0
+
+            camperSound(id, g_iCamper > 0 ? SOUND_MENU_REMOVE : SOUND_MENU_NAV)
+            camperMenu(id, g_iCamper > 0 ? MENU_REMOVE : MENU_ROOT)
+        }
+        case REMOVE_ALL:
+        {
+            while( g_iCamper )
+            {
+                ArrayGetArray(g_aCamper, 0, eCamper)
+                camperKill(eCamper[CAMPER_ID])
+                camperRemove(0)
+            }
+
+            client_print_color(id, id, "%L %L", id, "CAMPER_CHAT_TAG", id, "CAMPER_CHAT_REMOVE_ALL")
+            g_ePlayerData[id][PDATA_CAMPER_MENU] = 0
+
+            camperSound(id, SOUND_MENU_ALERT)
+            camperMenu(id, MENU_ROOT)
+        }
+        case MENU_EXIT:
+        {
+            if ( !g_ePlayerData[id][PDATA_MENU_TRACE] )
+            {
+                camperSound(id, SOUND_MENU_NAV)
+                camperMenu(id, MENU_ROOT)
+
+                DisableAction(id)
+                g_ePlayerData[id][PDATA_CAMPER_MENU] = 0
+            }
+
+            g_ePlayerData[id][PDATA_MENU_TRACE] = false
+        }
+        default:
+        {
+            DisableAction(id)
+            g_ePlayerData[id][PDATA_CAMPER_MENU] = 0
+        }
+    }
+
+    menu_destroy(menu)
+    return PLUGIN_HANDLED
+}
+
 public menuStatus(id, iMenu)
 {
     new szItem[64], eCamper[CAMPER]
-
     menuNav(id, iMenu)
     ArrayGetArray(g_aCamper, g_ePlayerData[id][PDATA_CAMPER_MENU], eCamper)
 
     formatex(szItem, charsmax(szItem), "%L", id, "CAMPER_STATUS_CURRENT",
-    eCamper[CAMPER_FLAGS] & FLAG_ACTIVE ? "\y" : "\r", id, eCamper[CAMPER_FLAGS] & FLAG_ACTIVE ? "CAMPER_ENABLED" : "CAMPER_DISABLED")
+    eCamper[CAMPER_FLAGS] & FLAG_ACTIVE ? "\y" : "\r", eCamper[CAMPER_NAME], id, eCamper[CAMPER_FLAGS] & FLAG_ACTIVE ? "CAMPER_ENABLED" : "CAMPER_DISABLED")
     menu_additem(iMenu, szItem)
 
     formatex(szItem, charsmax(szItem), "%L", id, "CAMPER_STATUS_ALL_ENABLE")
@@ -840,9 +936,9 @@ public menuStatus(id, iMenu)
     formatex(szItem, charsmax(szItem), "%L", id, "CAMPER_STATUS_ALL_DISABLE")
     menu_additem(iMenu, szItem)
 
-    g_ePlayerData[id][PDATA_CAMPER_ACTION] = true
+    EnableAction(id)
+    camperSelect(eCamper, TARGET_SELECT)
     g_ePlayerData[id][PDATA_MENU_TYPE] = MENU_STATUS
-    eCamper[CAMPER_FLAGS] |= FLAG_SELECT
     ArraySetArray(g_aCamper, g_ePlayerData[id][PDATA_CAMPER_MENU], eCamper)
 }
 
@@ -852,7 +948,7 @@ public menuHandlerStatus(id, menu, item)
     ArrayGetArray(g_aCamper, g_ePlayerData[id][PDATA_CAMPER_MENU], eCamper)
     if ( !g_ePlayerData[id][PDATA_MENU_TRACE] )
     {
-        eCamper[CAMPER_FLAGS] &= ~FLAG_SELECT
+        camperSelect(eCamper, eCamper[CAMPER_FLAGS] & FLAG_ACTIVE ? TARGET_HIDE : TARGET_GHOST)
         ArraySetArray(g_aCamper, g_ePlayerData[id][PDATA_CAMPER_MENU], eCamper)
     }
 
@@ -882,7 +978,7 @@ public menuHandlerStatus(id, menu, item)
         {
             eCamper[CAMPER_FLAGS] ^= FLAG_ACTIVE
 
-            client_print_color(id, id, "%L %L", id, "CAMPER_CHAT_TAG", id, "CAMPER_CHAT_STATUS_CURRENT",
+            client_print_color(id, id, "%L %L", id, "CAMPER_CHAT_TAG", id, "CAMPER_CHAT_STATUS_CURRENT", eCamper[CAMPER_NAME],
             id, eCamper[CAMPER_FLAGS] & FLAG_ACTIVE ? "CAMPER_CHAT_ENABLED" : "CAMPER_CHAT_DISABLED")
             ArraySetArray(g_aCamper, g_ePlayerData[id][PDATA_CAMPER_MENU], eCamper)
 
@@ -922,7 +1018,7 @@ public menuHandlerStatus(id, menu, item)
                 camperSound(id, SOUND_MENU_NAV)
                 camperMenu(id, MENU_ROOT)
 
-                g_ePlayerData[id][PDATA_CAMPER_ACTION] = false
+                DisableAction(id)
                 g_ePlayerData[id][PDATA_CAMPER_MENU] = 0
             }
 
@@ -930,110 +1026,8 @@ public menuHandlerStatus(id, menu, item)
         }
         default:
         {
-            g_ePlayerData[id][PDATA_CAMPER_ACTION] = false
+            DisableAction(id)
             g_ePlayerData[id][PDATA_CAMPER_MENU] = 0
-        }
-    }
-
-    menu_destroy(menu)
-    return PLUGIN_HANDLED
-}
-
-public menuRemove(id, iMenu)
-{
-    new eCamper[CAMPER], szItem[64]
-
-    ArrayGetArray(g_aCamper, g_ePlayerData[id][PDATA_CAMPER_MENU], eCamper)
-    menuNav(id, iMenu)
-
-    formatex(szItem, charsmax(szItem), "%L", id, "CAMPER_REMOVE_CURRENT")
-    menu_additem(iMenu, szItem)
-
-    formatex(szItem, charsmax(szItem), "%L", id, "CAMPER_REMOVE_ALL")
-    menu_additem(iMenu, szItem)
-
-    g_ePlayerData[id][PDATA_CAMPER_ACTION] = true
-    g_ePlayerData[id][PDATA_MENU_TYPE] = MENU_REMOVE
-    eCamper[CAMPER_FLAGS] |= FLAG_SELECT
-    ArraySetArray(g_aCamper, g_ePlayerData[id][PDATA_CAMPER_MENU], eCamper)
-}
-
-public menuHandlerRemove(id, menu, item)
-{
-    new eCamper[CAMPER]
-    ArrayGetArray(g_aCamper, g_ePlayerData[id][PDATA_CAMPER_MENU], eCamper)
-    if ( !g_ePlayerData[id][PDATA_MENU_TRACE] )
-    {
-        eCamper[CAMPER_FLAGS] &= ~FLAG_SELECT
-        ArraySetArray(g_aCamper, g_ePlayerData[id][PDATA_CAMPER_MENU], eCamper)
-    }
-
-    switch( item )
-    {
-        case REMOVE_NEXT:
-        {
-            if ( g_ePlayerData[id][PDATA_CAMPER_MENU] >= g_iCamper - 1 )
-                g_ePlayerData[id][PDATA_CAMPER_MENU] = 0
-            else
-                g_ePlayerData[id][PDATA_CAMPER_MENU] ++
-
-            camperSound(id, SOUND_MENU_NAV)
-            camperMenu(id, MENU_REMOVE)
-        }
-        case REMOVE_BACK:
-        {
-            if ( g_ePlayerData[id][PDATA_CAMPER_MENU] <= 0 )
-                g_ePlayerData[id][PDATA_CAMPER_MENU] = g_iCamper - 1
-            else
-                g_ePlayerData[id][PDATA_CAMPER_MENU] --
-
-            camperSound(id, SOUND_MENU_NAV)
-            camperMenu(id, MENU_REMOVE)
-        }
-        case REMOVE_CURRENT:
-        {
-            camperKill(eCamper[CAMPER_ID])
-            camperRemove(g_ePlayerData[id][PDATA_CAMPER_MENU])
-
-            client_print_color(id, id, "%L %L", id, "CAMPER_CHAT_TAG", id, "CAMPER_CHAT_REMOVE_CURRENT")
-            g_ePlayerData[id][PDATA_CAMPER_MENU] = 0
-
-            camperSound(id, g_iCamper > 0 ? SOUND_MENU_REMOVE : SOUND_MENU_NAV)
-            camperMenu(id, g_iCamper > 0 ? MENU_REMOVE : MENU_ROOT)
-        }
-        case REMOVE_ALL:
-        {
-            while ( g_iCamper )
-            {
-                ArrayGetArray(g_aCamper, 0, eCamper)
-
-                camperKill(eCamper[CAMPER_ID])
-                camperRemove(0)
-            }
-
-            client_print_color(0, 0, "%L %L", 0, "CAMPER_CHAT_TAG", 0, "CAMPER_CHAT_REMOVE_ALL")
-            g_ePlayerData[id][PDATA_CAMPER_MENU] = 0
-
-            camperSound(id, SOUND_MENU_ALERT)
-            camperMenu(id, MENU_ROOT)
-        }
-        case MENU_EXIT:
-        {
-            if ( !g_ePlayerData[id][PDATA_MENU_TRACE] )
-            {
-                camperSound(id, SOUND_MENU_NAV)
-                camperMenu(id, MENU_ROOT)
-
-                g_ePlayerData[id][PDATA_CAMPER_ACTION] = false
-                g_ePlayerData[id][PDATA_CAMPER_MENU] = 0
-            }
-
-            g_ePlayerData[id][PDATA_MENU_TRACE] = false
-        }
-        default:
-        {
-            g_ePlayerData[id][PDATA_CAMPER_MENU] = 0
-            g_ePlayerData[id][PDATA_CAMPER_ACTION] = false
         }
     }
 
@@ -1044,7 +1038,6 @@ public menuHandlerRemove(id, menu, item)
 public menuScale(id, iMenu)
 {
     new szItem[64]
-
     formatex(szItem, charsmax(szItem), "%L", id, "CAMPER_SCALE_HEIGHT", id, g_ePlayerData[id][PDATA_SCALE_UP] ? "CAMPER_ADD" : "CAMPER_REMOVE")
     menu_additem(iMenu, szItem)
 
@@ -1074,9 +1067,6 @@ public menuHandlerScale(id, menu, item)
         menu_destroy(menu)
         return PLUGIN_HANDLED
     }
-
-    new Float:fCurrentTime
-    fCurrentTime = get_gametime()
 
     switch( item )
     {
@@ -1156,38 +1146,37 @@ public menuHandlerScale(id, menu, item)
         case SCALE_PLACE:
         {
             camperTrace(eCamper, id)
+            DisableAction(id)
+            set_pdata_float(id, PDATA_NEXT_ATTACK, 0.0, XO_CBASEPLAYER, XO_CBASEPLAYER)
             g_ePlayerData[id][PDATA_CAMPER_GHOST] = 0
-            g_ePlayerData[id][PDATA_CAMPER_ACTION] = false
 
-            if ( eCamper[CAMPER_FLAGS] & FLAG_ACTIVE_DELAY )
-                eCamper[CAMPER_NEXT_ENABLE] = fCurrentTime + random_float(g_eSettings[SETTING_DEFAULT_ACTIVE_DELAY][0], g_eSettings[SETTING_DEFAULT_ACTIVE_DELAY][1])
-            else
-                eCamper[CAMPER_FLAGS] |= FLAG_ACTIVE
-
-            camperSetSeq(eCamper)
-            camperSetActive(eCamper)
+            eCamper[CAMPER_FLAGS] |= FLAG_ACTIVE
+            camperSetSeq(eCamper[CAMPER_ID])
+            camperSetSize(eCamper)
             ArraySetArray(g_aCamper, iItem, eCamper)
 
-            client_print_color(id, id, "%L %L", id, "CAMPER_CHAT_TAG", id, "CAMPER_CHAT_CREATE_NEW")
+            client_print_color(id, id, "%L %L", id, "CAMPER_CHAT_TAG", id, "CAMPER_CHAT_CREATE_NEW", eCamper[CAMPER_NAME])
             camperSound(id, SOUND_MENU_NAV)
             camperMenu(id, MENU_ROOT)
         }
         case MENU_EXIT:
         {
-            camperSound(id, SOUND_MENU_NAV)
-            camperMenu(id, MENU_ROOT)
-
             camperKill(eCamper[CAMPER_ID])
             camperRemove(iItem)
+            DisableAction(id)
+            set_pdata_float(id, PDATA_NEXT_ATTACK, 0.0, XO_CBASEPLAYER, XO_CBASEPLAYER)
             g_ePlayerData[id][PDATA_CAMPER_GHOST] = 0
-            g_ePlayerData[id][PDATA_CAMPER_ACTION] = false
+
+            camperSound(id, SOUND_MENU_NAV)
+            camperMenu(id, MENU_ROOT)
         }
         default:
         {
             camperKill(eCamper[CAMPER_ID])
             camperRemove(iItem)
+            DisableAction(id)
+            set_pdata_float(id, PDATA_NEXT_ATTACK, 0.0, XO_CBASEPLAYER, XO_CBASEPLAYER)
             g_ePlayerData[id][PDATA_CAMPER_GHOST] = 0
-            g_ePlayerData[id][PDATA_CAMPER_ACTION] = false
         }
     }
 
@@ -1197,9 +1186,7 @@ public menuHandlerScale(id, menu, item)
 
 public camperTask()
 {
-    new eCamper[CAMPER], Float:fCurrentTime
-    fCurrentTime = get_gametime()
-
+    new eCamper[CAMPER]
     for ( new id = 1; id <= g_iMaxPlayers; id ++ )
     {
         if ( !is_user_alive(id) )
@@ -1219,56 +1206,27 @@ public camperTask()
     for ( new i = 0; i < g_iCamper; i ++ )
     {
         ArrayGetArray(g_aCamper, i, eCamper)
-
         if ( eCamper[CAMPER_FLAGS] & FLAG_SELECT )
             camperBeam(eCamper)
 
         if ( eCamper[CAMPER_FLAGS] & FLAG_ACTIVE )
-        {
-            camperPlayer(eCamper, fCurrentTime)
-
-            if ( eCamper[CAMPER_NEXT_DISABLE] > 0.0
-            && fCurrentTime >= eCamper[CAMPER_NEXT_DISABLE] )
-            {
-                eCamper[CAMPER_FLAGS] &= ~FLAG_ACTIVE
-                eCamper[CAMPER_NEXT_DISABLE] = 0.0
-                eCamper[CAMPER_NEXT_ENABLE] = fCurrentTime + random_float(g_eSettings[SETTING_DEFAULT_ACTIVE_COOLDOWN][0], g_eSettings[SETTING_DEFAULT_ACTIVE_COOLDOWN][1])
-
-                ArraySetArray(g_aCamper, i, eCamper)
-            }
-        }
-        else
-        {
-            if ( eCamper[CAMPER_NEXT_ENABLE] > 0.0
-            && fCurrentTime >= eCamper[CAMPER_NEXT_ENABLE] )
-            {
-                eCamper[CAMPER_FLAGS] |= FLAG_ACTIVE
-                eCamper[CAMPER_NEXT_ENABLE] = 0.0
-                if ( eCamper[CAMPER_FLAGS] & FLAG_ACTIVE_DURATION )
-                    eCamper[CAMPER_NEXT_DISABLE] = fCurrentTime + random_float(g_eSettings[SETTING_DEFAULT_ACTIVE_DURATION][0], g_eSettings[SETTING_DEFAULT_ACTIVE_DURATION][1])
-
-                ArraySetArray(g_aCamper, i, eCamper)
-            }
-        }
+            camperPlayer(eCamper)
     }
 }
 
 public camperCreate(id, iItem)
 {
-    new iEnt
-    iEnt = engfunc(EngFunc_CreateNamedEntity, engfunc(EngFunc_AllocString, "info_target"))
-
+    new iEnt = cs_create_entity("info_target")
     if ( !pev_valid(iEnt) )
-        return;
+        return
 
     new eCamper[CAMPER]
     ArrayGetArray(g_aCamperConfig, iItem, eCamper)
-
     eCamper[CAMPER_ID] = iEnt
-    eCamper[CAMPER_ITEM] = iItem
     eCamper[CAMPER_SCALE][0] = eCamper[CAMPER_SCALE][1] = eCamper[CAMPER_SCALE][2] = g_eSettings[SETTING_SIZE_BASE]
     if ( id )
     {
+        EnableAction(id)
         g_ePlayerData[id][PDATA_CAMPER_GHOST] = iEnt
         g_ePlayerData[id][PDATA_CAMPER_ACTION] = true
         g_ePlayerData[id][PDATA_SCALE_UP] = true
@@ -1276,22 +1234,27 @@ public camperCreate(id, iItem)
         g_ePlayerData[id][PDATA_OFFSET] = g_eSettings[SETTING_OFFSET_BASE]
     }
 
-    set_pev(iEnt, CAMPER_ARRAY_ITEM, g_iCamper)
-    set_pev(iEnt, pev_impulse, CAMPER_KEY)
+    camperSelect(eCamper, TARGET_GHOST)
     set_pev(iEnt, pev_classname, g_szCN)
+    set_pev(iEnt, pev_impulse, CAMPER_KEY)
+    set_pev(iEnt, CAMPER_ARRAY_ITEM, g_iCamper)
+    dllfunc(DLLFunc_Spawn, iEnt)
+    set_pev(iEnt, pev_solid, SOLID_NOT)
+    set_pev(iEnt, pev_movetype, MOVETYPE_FLY)
     engfunc(EngFunc_SetModel, iEnt, g_eSettings[SETTING_DEFAULT_MODEL])
 
     ArrayPushArray(g_aCamper, eCamper)
-    g_iCamper ++
-
-    dllfunc(DLLFunc_Spawn, iEnt)
+    if ( ++ g_iCamper == 1 )
+        set_task(g_eSettings[SETTING_CAMPER_TASK], "camperTask", CAMPER_KEY, .flags = "b")
 }
 
 stock camperRemove(iItem)
 {
     new eCamper[CAMPER]
     ArrayDeleteItem(g_aCamper, iItem)
-    g_iCamper --
+
+    if ( -- g_iCamper == 0 )
+        remove_task(CAMPER_KEY)
 
     for ( new i = iItem; i < g_iCamper; i ++ )
     {
@@ -1313,6 +1276,7 @@ public saveData(id)
     if ( !iFile )
         return PLUGIN_HANDLED
 
+    camperTerminate()
     for ( new i = 0; i < g_iCamper; i ++ )
     {
         ArrayGetArray(g_aCamper, i, eCamper)
@@ -1372,7 +1336,7 @@ public loadData()
         if ( szData[0] == '[' )
         {
             if ( iCount != -1 )
-                loadDataCamper(fCorners, fScale, fOrigin, iFlags, iItem, iCount)
+                loadDataCamper(iItem, iFlags, fOrigin, fScale, fCorners, iCount)
 
             iCount ++
         }
@@ -1423,13 +1387,13 @@ public loadData()
     }
 
     if ( iCount != -1 )
-        loadDataCamper(fCorners, fScale, fOrigin, iFlags, iItem, iCount)
+        loadDataCamper(iItem, iFlags, fOrigin, fScale, fCorners, iCount)
 
     fclose(iFile)
     return PLUGIN_HANDLED
 }
 
-stock loadDataCamper(Float:fCorners[24], Float:fScale[3], Float:fOrigin[3], iFlags, iItem, iCount)
+stock loadDataCamper(iItem, iFlags, Float:fOrigin[3], Float:fScale[3], Float:fCorners[24], iCount)
 {
     new eCamper[CAMPER]
     camperCreate(0, iItem)
@@ -1441,10 +1405,9 @@ stock loadDataCamper(Float:fCorners[24], Float:fScale[3], Float:fOrigin[3], iFla
     for ( new i = 0; i < 24; i ++ )
         eCamper[CAMPER_CORNERS][i] = fCorners[i]
 
-    set_pev(eCamper[CAMPER_ID], pev_origin, fOrigin)
+    camperSetSeq(eCamper[CAMPER_ID])
     camperSetBox(eCamper)
-    camperSetSeq(eCamper)
-    camperSetActive(eCamper)
+    camperSetSize(eCamper)
     ArraySetArray(g_aCamper, iCount, eCamper)
 }
 
@@ -1464,79 +1427,14 @@ public camperGodMode(id)
     camperMenu(id, MENU_ROOT)
 }
 
-public fwdUpdateClientData(id, iSendWeapons, iHandle)
-{
-    if ( g_ePlayerData[id][PDATA_CAMPER_GHOST] )
-    {
-        set_cd(iHandle, CD_WeaponAnim, 0)
-        set_cd(iHandle, CD_flNextAttack, get_gametime() + 0.1)
-    }
-
-    return FMRES_IGNORED
-}
-
-public fwdAddToFullPack(es, e, iEnt, iHost, iHostFlags, iPlayer, pSet)
-{
-    if ( !pev_valid(iEnt)
-    || !isCamper(iEnt)
-    || !get_orig_retval() )
-        return FMRES_IGNORED
-
-    new eCamper[CAMPER]
-    if ( camperGet(eCamper, iEnt) == -1 )
-        return FMRES_IGNORED
-
-    new bool:bHidden
-    bHidden = !(eCamper[CAMPER_FLAGS] & FLAG_ACTIVE)
-    if ( !g_ePlayerData[iHost][PDATA_CAMPER_ACTION] )
-    {
-        set_es(es, ES_Effects, EF_NODRAW)
-    }
-    else if ( eCamper[CAMPER_FLAGS] & FLAG_GHOST || bHidden )
-    {
-        set_es(es, ES_RenderMode, kRenderTransAlpha)
-        set_es(es, ES_RenderAmt, g_eSettings[SETTING_GHOST_ALPHA])
-    }
-
-    return FMRES_IGNORED
-}
-
-public fwdSpawn(iEnt)
-{
-    if ( !isCamper(iEnt) )
-        return HAM_IGNORED
-
-    set_pev(iEnt, pev_solid, SOLID_NOT)
-    set_pev(iEnt, pev_movetype, MOVETYPE_FLY)
-
-    return HAM_IGNORED
-}
-
-public fwdKilled(id, iAttacker, bGib)
-{
-    camperResetPlayer(id)
-    if ( g_ePlayerData[id][PDATA_CAMPER_GHOST] )
-    {
-        new eCamper[CAMPER], iItem
-
-        if ( (iItem = camperGet(eCamper, g_ePlayerData[id][PDATA_CAMPER_GHOST])) != -1 )
-        {
-            camperKill(eCamper[CAMPER_ID])
-            camperRemove(iItem)
-            g_ePlayerData[id][PDATA_CAMPER_GHOST] = 0
-        }
-    }
-
-    return HAM_IGNORED
-}
-
 public fwdPreThink(id)
 {
     if ( !is_user_alive(id) )
         return HAM_IGNORED
 
-    new iButton
+    new iButton, Float:fCurrentTime
     iButton = pev(id, pev_button)
+    fCurrentTime = get_gametime()
 
     if ( g_ePlayerData[id][PDATA_CAMPER_GHOST] )
     {
@@ -1556,8 +1454,28 @@ public fwdPreThink(id)
             }
         }
 
+        set_pdata_float(id, PDATA_NEXT_ATTACK, fCurrentTime + 0.1, XO_CBASEPLAYER, XO_CBASEPLAYER)
         iButton &= ~(IN_ATTACK | IN_ATTACK2)
         set_pev(id, pev_button, iButton)
+    }
+
+    return HAM_IGNORED
+}
+
+public fwdKilled(id, iAttacker, bGib)
+{
+    DisableAction(id)
+    camperResetPlayer(id)
+    if ( g_ePlayerData[id][PDATA_CAMPER_GHOST] )
+    {
+        new eCamper[CAMPER], iItem
+
+        if ( (iItem = camperGet(eCamper, g_ePlayerData[id][PDATA_CAMPER_GHOST])) != -1 )
+        {
+            camperKill(eCamper[CAMPER_ID])
+            camperRemove(iItem)
+            g_ePlayerData[id][PDATA_CAMPER_GHOST] = 0
+        }
     }
 
     return HAM_IGNORED
@@ -1566,7 +1484,6 @@ public fwdPreThink(id)
 public camperTrace(eCamper[CAMPER], id)
 {
     new Float:fVec1[3]
-
     pev(id, pev_origin, eCamper[CAMPER_ORIGIN])
     pev(id, pev_view_ofs, fVec1)
     xs_vec_add(eCamper[CAMPER_ORIGIN], fVec1, eCamper[CAMPER_ORIGIN])
@@ -1585,7 +1502,6 @@ public camperTrace(eCamper[CAMPER], id)
     camperSetOffset(eCamper)
     camperSetBox(eCamper, true)
     camperBeam(eCamper)
-
     set_pev(eCamper[CAMPER_ID], pev_origin, eCamper[CAMPER_ORIGIN])
 }
 
@@ -1716,18 +1632,79 @@ stock camperSetOffset(eCamper[CAMPER])
     }
 }
 
-stock camperSetSeq(eCamper[CAMPER])
+stock camperSetSeq(iEnt)
 {
-    set_pev(eCamper[CAMPER_ID], pev_sequence, 0)
-    set_pev(eCamper[CAMPER_ID], pev_frame, 0)
-    set_pev(eCamper[CAMPER_ID], pev_framerate, 1.0)
-    set_pev(eCamper[CAMPER_ID], pev_animtime, get_gametime())
+    set_pev(iEnt, pev_sequence, 0)
+    set_pev(iEnt, pev_frame, 0.0)
+    set_pev(iEnt, pev_framerate, 1.0)
+    set_pev(iEnt, pev_animtime, get_gametime())
 }
 
-stock camperSetActive(eCamper[CAMPER])
+stock camperSetSize(eCamper[CAMPER])
 {
+    camperSelect(eCamper, TARGET_HIDE)
+    engfunc(EngFunc_SetOrigin, eCamper[CAMPER_ID], eCamper[CAMPER_ORIGIN])
     set_pev(eCamper[CAMPER_ID], pev_solid, SOLID_TRIGGER)
+    set_pev(eCamper[CAMPER_ID], pev_movetype, MOVETYPE_NONE)
+
     engfunc(EngFunc_SetSize, eCamper[CAMPER_ID], eCamper[CAMPER_MINS], eCamper[CAMPER_MAXS])
+    xs_vec_add(eCamper[CAMPER_MINS], eCamper[CAMPER_ORIGIN], eCamper[CAMPER_MINS])
+    xs_vec_add(eCamper[CAMPER_MAXS], eCamper[CAMPER_ORIGIN], eCamper[CAMPER_MAXS])
+}
+
+stock camperSelect(eCamper[CAMPER], iAction)
+{
+    new iRender, iRenderFx, iRenderColor[3], iRenderAmt
+
+    iRenderFx = kRenderFxNone
+    if ( iAction == TARGET_SELECT )
+    {
+        if ( eCamper[CAMPER_FLAGS] & FLAG_ACTIVE )    { iRenderColor[0] = g_iColorActive[0];      iRenderColor[1] = g_iColorActive[1];     iRenderColor[2] = g_iColorActive[2]; }
+        else                                            { iRenderColor[0] = g_iColorInactive[0];    iRenderColor[1] = g_iColorInactive[1];   iRenderColor[2] = g_iColorInactive[2]; }
+
+        iRender = kRenderTransColor
+        iRenderFx = kRenderFxGlowShell
+        iRenderAmt = 16
+
+        eCamper[CAMPER_FLAGS] |= FLAG_SELECT
+    }
+    else if ( iAction == TARGET_GHOST )
+    {
+        iRender = kRenderTransAlpha
+        iRenderAmt = g_eSettings[SETTING_GHOST_ALPHA]
+    }
+    else if ( iAction == TARGET_HIDE )
+    {
+        iRender = kRenderTransAlpha
+        iRenderAmt = 0
+
+        eCamper[CAMPER_FLAGS] &= ~FLAG_SELECT
+    }
+    else if ( iAction == TARGET_CLEAR )
+    {
+        iRender = kRenderNormal
+        iRenderAmt = 255
+
+        eCamper[CAMPER_FLAGS] &= ~FLAG_SELECT
+    }
+
+    set_ent_rendering(eCamper[CAMPER_ID], iRenderFx, iRenderColor[0], iRenderColor[1], iRenderColor[2], iRender, iRenderAmt)
+}
+
+stock camperSound(iEnt, iSound, bool:bPlayer = true)
+{
+    new szSample[64]
+    switch( iSound )
+    {
+        case SOUND_MENU_NAV:    copy(szSample, charsmax(szSample), SOUND_NAV)
+        case SOUND_MENU_REMOVE: copy(szSample, charsmax(szSample), SOUND_REMOVE)
+        case SOUND_MENU_ALERT:  copy(szSample, charsmax(szSample), SOUND_ALERT)
+    }
+
+    if ( bPlayer )
+        client_cmd(iEnt, "spk %s", szSample)
+    else
+        engfunc(EngFunc_EmitSound, iEnt, CHAN_ITEM, szSample, VOL_NORM, ATTN_NORM, 0, PITCH_NORM)
 }
 
 stock camperBeam(eCamper[CAMPER])
@@ -1776,24 +1753,24 @@ stock beamDraw(Float:fStart[3], Float:fEnd[3], bool:bActive)
     write_byte(0)
     if ( bActive )
     {
-        write_byte(g_eSettings[SETTING_COLOR_ACTIVE][0])
-        write_byte(g_eSettings[SETTING_COLOR_ACTIVE][1])
-        write_byte(g_eSettings[SETTING_COLOR_ACTIVE][2])
+        write_byte(g_iColorActive[0])
+        write_byte(g_iColorActive[1])
+        write_byte(g_iColorActive[2])
     }
     else
     {
-        write_byte(g_eSettings[SETTING_COLOR_INACTIVE][0])
-        write_byte(g_eSettings[SETTING_COLOR_INACTIVE][1])
-        write_byte(g_eSettings[SETTING_COLOR_INACTIVE][2])
+        write_byte(g_iColorInactive[0])
+        write_byte(g_iColorInactive[1])
+        write_byte(g_iColorInactive[2])
     }
     write_byte(g_eSettings[SETTING_BEAM_ALPHA])
     write_byte(0)
     message_end()
 }
 
-stock camperPlayer(eCamper[CAMPER], Float:fCurrentTime)
+stock camperPlayer(eCamper[CAMPER])
 {
-    new Float:fDamage
+    new Float:fDamage, Float:fCurrentTime = get_gametime()
     for ( new id = 1; id <= g_iMaxPlayers; id ++ )
     {
         if ( !is_user_alive(id) )
@@ -1807,11 +1784,7 @@ stock camperPlayer(eCamper[CAMPER], Float:fCurrentTime)
             }
             else if ( fCurrentTime >= g_ePlayerData[id][PDATA_NEXT_RESET] )
             {
-                g_ePlayerData[id][PDATA_TAKING_DAMAGE] = false
-                g_ePlayerData[id][PDATA_NEXT_RESET] = 0.0
-                g_ePlayerData[id][PDATA_NEXT_WARNING] = 0.0
-                g_ePlayerData[id][PDATA_NEXT_DAMAGE] = 0.0
-                g_ePlayerData[id][PDATA_NEXT_DAMAGE_MULTIPLIER] = 0.0
+                camperResetPlayer(id)
             }
 
             continue
@@ -1833,10 +1806,9 @@ stock camperPlayer(eCamper[CAMPER], Float:fCurrentTime)
             else if ( fCurrentTime >= g_ePlayerData[id][PDATA_NEXT_DAMAGE_MULTIPLIER] )
                 fDamage += ((fCurrentTime - g_ePlayerData[id][PDATA_NEXT_DAMAGE_MULTIPLIER]) * eCamper[CAMPER_DAMAGE_MULTIPLIER])
 
+            ExecuteHamB(Ham_TakeDamage, id, 0, 0, fDamage, eCamper[CAMPER_DAMAGETYPE])
             if ( eCamper[CAMPER_FLAGS] & FLAG_DAMAGE_SLAP )
-                user_slap(id, floatround(fDamage))
-            else
-                fakedamage(id, "weapon_knife", fDamage, DMG_GENERIC)
+                user_slap(id, 0)
 
             g_ePlayerData[id][PDATA_TAKING_DAMAGE] = true
             g_ePlayerData[id][PDATA_NEXT_DAMAGE] = fCurrentTime + random_float(eCamper[CAMPER_DAMAGE_TICK][0], eCamper[CAMPER_DAMAGE_TICK][1])
@@ -1865,27 +1837,17 @@ stock camperPlayer(eCamper[CAMPER], Float:fCurrentTime)
 
 stock bool:isCamperActive(eCamper[CAMPER], id)
 {
-    new Float:fOrigin[3], Float:fAbsMins[3], Float:fAbsMaxs[3]
+    new Float:fOrigin[3]
     pev(id, pev_origin, fOrigin)
-    xs_vec_add(eCamper[CAMPER_ORIGIN], eCamper[CAMPER_MINS], fAbsMins)
-    xs_vec_add(eCamper[CAMPER_ORIGIN], eCamper[CAMPER_MAXS], fAbsMaxs)
 
     if ( eCamper[CAMPER_FLAGS] & FLAG_ACTIVE
     && CsTeams:eCamper[CAMPER_TEAM] & cs_get_user_team(id)
-    && fOrigin[0] >= fAbsMins[0] && fOrigin[0] <= fAbsMaxs[0]
-    && fOrigin[1] >= fAbsMins[1] && fOrigin[1] <= fAbsMaxs[1]
-    && fOrigin[2] >= fAbsMins[2] && fOrigin[2] <= fAbsMaxs[2] )
+    && fOrigin[0] >= eCamper[CAMPER_MINS][0] && fOrigin[0] <= eCamper[CAMPER_MAXS][0]
+    && fOrigin[1] >= eCamper[CAMPER_MINS][1] && fOrigin[1] <= eCamper[CAMPER_MAXS][1]
+    && fOrigin[2] >= eCamper[CAMPER_MINS][2] && fOrigin[2] <= eCamper[CAMPER_MAXS][2] )
         return true
 
     return false
-}
-
-stock camperReset(eCamper[CAMPER])
-{
-    eCamper[CAMPER_FLAGS] &= ~FLAG_ACTIVE
-    eCamper[CAMPER_NEXT_ENABLE] = 0.0
-    eCamper[CAMPER_NEXT_DISABLE] = 0.0
-    eCamper[CAMPER_NEXT_DISABLE] = 0.0
 }
 
 stock camperResetPlayer(id)
@@ -1897,25 +1859,11 @@ stock camperResetPlayer(id)
     g_ePlayerData[id][PDATA_NEXT_DAMAGE_MULTIPLIER] = 0.0
 }
 
-stock camperSound(iEnt, iSound, iChan = CHAN_ITEM, bool:bPlayer = true, iFlags = 0, iPitch = PITCH_NORM)
-{
-    new szSample[64]
-
-    switch( iSound )
-    {
-        case SOUND_MENU_NAV:    copy(szSample, charsmax(szSample), g_eSettings[SETTING_SOUND_MENU_NAV])
-        case SOUND_MENU_REMOVE: copy(szSample, charsmax(szSample), g_eSettings[SETTING_SOUND_MENU_REMOVE])
-        case SOUND_MENU_ALERT:  copy(szSample, charsmax(szSample), g_eSettings[SETTING_SOUND_MENU_ALERT])
-    }
-
-    if ( bPlayer )
-        client_cmd(iEnt, "spk %s", szSample)
-    else
-        engfunc(EngFunc_EmitSound, iEnt, iChan, szSample, VOL_NORM, ATTN_NORM, iFlags, iPitch)
-}
-
 stock camperGet(eCamper[CAMPER], iEnt)
 {
+    if ( !isCamper(iEnt) )
+        return -1
+
     new iItem
     iItem = pev(iEnt, CAMPER_ARRAY_ITEM)
     if ( iItem < 0 || iItem >= g_iCamper )
@@ -1927,76 +1875,127 @@ stock camperGet(eCamper[CAMPER], iEnt)
 
 stock bool:isCamper(iEnt)
 {
-    return pev(iEnt, pev_impulse) == CAMPER_KEY
+    return pev_valid(iEnt) && pev(iEnt, pev_impulse) == CAMPER_KEY
 }
 
 stock camperKill(iEnt)
 {
-    if (pev_valid(iEnt))
+    if ( pev_valid(iEnt) )
         set_pev(iEnt, pev_flags, pev(iEnt, pev_flags) | FL_KILLME)
 }
 
-stock parseSetting(iType, szKey[], iKeyLen, szValue[], iValueLen, any:output[], iOutputLen, const any:fallback[] = {0.0, 0.0})
+stock parseSetting(iType, szValue[], iValueLen, any:aOutput[], iOutputLength)
 {
     switch ( iType )
     {
-        case DTYPE_FLOAT_RANGE:
+        case DTYPE_INT:
         {
-            strtok(szValue, szKey, iKeyLen, szValue, iValueLen, ' ')
-            output[0] = str_to_float(szKey)
-            output[1] = str_to_float(szValue)
+            new szTok[MAX_VALUE_LENGTH], szTmp[MAX_VALUE_LENGTH], iCounter
+            copy(szTmp, charsmax(szTmp), szValue)
 
-            if ( output[0] < 0.0 ) output[0] = fallback[0]
-            if ( output[1] < 0.0 ) output[1] = fallback[1]
+            strtok(szTmp, szTok, charsmax(szTok), szTmp, charsmax(szTmp), ' ')
+            trim(szTok)
+            while ( szTok[0] )
+            {
+                aOutput[iCounter ++] = str_to_num(szTok)
+
+                strtok(szTmp, szTok, charsmax(szTok), szTmp, charsmax(szTmp), ' ')
+                trim(szTok)
+            }
         }
         case DTYPE_FLOAT:
         {
-            output[0] = str_to_float(szValue)
-            if ( output[0] < 0.0 ) output[0] = fallback[0]
-        }
-        case DTYPE_INT:
-        {
-            output[0] = str_to_num(szValue)
-            if ( output[0] < 0 ) output[0] = fallback[0]
-        }
-        case DTYPE_BOOL:
-        {
-            output[0] = bool:str_to_num(szValue)
+            new szTok[MAX_VALUE_LENGTH], szTmp[MAX_VALUE_LENGTH], iCounter
+            copy(szTmp, charsmax(szTmp), szValue)
+
+            strtok(szTmp, szTok, charsmax(szTok), szTmp, charsmax(szTmp), ' ')
+            trim(szTok)
+            while ( szTok[0] )
+            {
+                aOutput[iCounter ++] = str_to_float(szTok)
+
+                strtok(szTmp, szTok, charsmax(szTok), szTmp, charsmax(szTmp), ' ')
+                trim(szTok)
+            }
         }
         case DTYPE_FLAGS:
         {
-            output[0] = read_flags(szValue)
+            aOutput[0] = read_flags(szValue)
         }
-        case DTYPE_VECTOR:
-        {
-            strtok(szValue, szKey, iKeyLen, szValue, iValueLen, ' ')
-            output[0] = str_to_num(szKey)
-
-            strtok(szValue, szKey, iKeyLen, szValue, iValueLen, ' ')
-            output[1] = str_to_num(szKey)
-            output[2] = str_to_num(szValue)
-        }
-        case DTYPE_ARRAY:
+        case DTYPE_ARRAY_STRING:
         {
             replace_all(szValue, iValueLen, "^"", " ")
-            ArrayPushString(output[0], szValue)
+            replace_all(szValue, iValueLen, "^^n", "^n")
+            ArrayPushString(aOutput[0], szValue)
+        }
+        case DTYPE_ARRAY_SOUND:
+        {
+            ArrayPushString(aOutput[0], szValue)
+            if ( !g_bFileWasRead ) precache_sound(szValue)
         }
         case DTYPE_STRING_MODEL:
         {
-            copy(output, iOutputLen, szValue)
+            copy(aOutput, iOutputLength, szValue)
             if ( !g_bFileWasRead ) precache_model(szValue)
         }
         case DTYPE_STRING_SOUND:
         {
-            copy(output, iOutputLen, szValue)
+            copy(aOutput, iOutputLength, szValue)
             if ( !g_bFileWasRead ) precache_sound(szValue)
         }
-        case DTYPE_STRING_SPRITE:
+        case DTYPE_STRING_MODEL_ID:
         {
             if ( !g_bFileWasRead )
-                output[0] = precache_model(szValue)
+                aOutput[0] = precache_model(szValue)
         }
     }
+}
+
+stock EnableAction(id)
+{
+    if ( !g_ePlayerData[id][PDATA_CAMPER_ACTION] )
+    {
+        new eCamper[CAMPER]
+        for ( new i = 0; i < g_iCamper; i ++ )
+        {
+            ArrayGetArray(g_aCamper, i, eCamper)
+            camperSelect(eCamper, TARGET_GHOST)
+        }
+
+        g_ePlayerData[id][PDATA_CAMPER_ACTION] = true
+        if ( ++ g_iActivePlayers == 1 )
+            EnableForward()
+    }
+}
+
+stock DisableAction(id)
+{
+    if ( g_ePlayerData[id][PDATA_CAMPER_ACTION] )
+    {
+        new eCamper[CAMPER]
+        for ( new i = 0; i < g_iCamper; i ++ )
+        {
+            ArrayGetArray(g_aCamper, i, eCamper)
+            camperSelect(eCamper, TARGET_HIDE)
+            ArraySetArray(g_aCamper, i, eCamper)
+        }
+
+        g_ePlayerData[id][PDATA_CAMPER_ACTION] = false
+        if ( -- g_iActivePlayers == 0 )
+            DisableForward()
+    }
+}
+
+stock EnableForward()
+{
+    EnableHamForward(g_iFwdPreThink)
+    EnableHamForward(g_iFwdKilled)
+}
+
+stock DisableForward()
+{
+    DisableHamForward(g_iFwdPreThink)
+    DisableHamForward(g_iFwdKilled)
 }
 
 stock LogConfigError(const iLine, const szText[], any:...)

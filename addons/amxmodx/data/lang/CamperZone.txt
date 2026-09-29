@@ -1,50 +1,53 @@
 [en] -- RedSMURF
-CAMPER_CHAT_TAG                        = ^4[CAMPER ZONE]^1
-CAMPER_CHAT_LIMIT                      = You've reached the maximum number of Camper Zones ^4%d
-CAMPER_CHAT_NO_CAMPER                  = There are no Camper Zones available
-CAMPER_CHAT_CREATE_NEW                 = ^3Camper Zone ^1created
-CAMPER_CHAT_STATUS_CURRENT             = ^3Camper Zone ^1is %L
-CAMPER_CHAT_STATUS_ALL_ENABLED         = All Camper Zones are now enabled
-CAMPER_CHAT_STATUS_ALL_DISABLED        = All Camper Zones are now disabled
-CAMPER_CHAT_REMOVE_CURRENT             = ^3Camper Zone ^1removed
-CAMPER_CHAT_REMOVE_ALL                 = All Camper Zones removed
-CAMPER_CHAT_SAVE                       = Camper Zones data saved in ^4%s
+CAMPER_CHAT_TAG                                = ^4[CAMPER ZONE]^1
+CAMPER_CHAT_LIMIT                              = You've reached the maximum number of Camper Zones ^4%d
+CAMPER_CHAT_NO_CAMPER                          = There are no Camper Zones available
+CAMPER_CHAT_CREATE_NEW                         = ^3%s ^1created
+CAMPER_CHAT_REMOVE_CURRENT                     = ^3%s ^1removed
+CAMPER_CHAT_REMOVE_ALL                         = All Camper Zones removed
+CAMPER_CHAT_SAVE                               = Camper Zone data saved in ^4%s
+CAMPER_CHAT_STATUS_CURRENT                     = ^3%s ^1is %L
+CAMPER_CHAT_STATUS_ALL_ENABLED                 = All Camper Zones are now Enabled
+CAMPER_CHAT_STATUS_ALL_DISABLED                = All Camper Zones are now Disabled
 
-CAMPER_CHAT_ENABLED                    = Enabled
-CAMPER_CHAT_DISABLED                   = Disabled
+CAMPER_CHAT_ENABLED                            = Enabled
+CAMPER_CHAT_DISABLED                           = Disabled
 
-CAMPER_NAV_NEXT                        = Next
-CAMPER_NAV_BACK                        = Back
-CAMPER_ADD                             = Add
-CAMPER_REMOVE                          = Remove
-CAMPER_ON                              = \y[ON]
-CAMPER_OFF                             = \r[OFF]
-CAMPER_ENABLED                         = \y[ENABLED]
-CAMPER_DISABLED                        = \r[DISABLED]
-CAMPER_INCREASE                        = \y[INCREASE]
-CAMPER_DECREASE                        = \r[DECREASE]
+CAMPER_NAV_NEXT                                = Next
+CAMPER_NAV_BACK                                = Back
+CAMPER_ADD                                     = Add
+CAMPER_REMOVE                                  = Remove
+CAMPER_ON                                      = \y[ON]
+CAMPER_OFF                                     = \r[OFF]
+CAMPER_ENABLED                                 = \y[ENABLED]
+CAMPER_DISABLED                                = \r[DISABLED]
+CAMPER_INCREASE                                = \y[INCREASE]
+CAMPER_DECREASE                                = \r[DECREASE]
 
-CAMPER_MENU_TITLE                      = \dCamper Zone - Version \y%s
-CAMPER_MENU_TITLE_PAGE                 = \yPage:\r
+CAMPER_MENU_TITLE                              = \dCamper Zone - Version \y%s
+CAMPER_MENU_TITLE_PAGE                         = \yPage:\r
 
-CAMPER_ROOT_CREATE                     = Create Camper Zone
-CAMPER_ROOT_STATUS                     = Status Camper Zone
-CAMPER_ROOT_REMOVE                     = Remove Camper Zone
-CAMPER_ROOT_SAVE                       = Save Data
-CAMPER_ROOT_NOCLIP                     = Status noclip %L
-CAMPER_ROOT_GODMODE                    = Status godmode %L
-CAMPER_ROOT_SCALE                      = Adjust scaling
+CAMPER_ROOT_CREATE                             = Create Camper Zone
+CAMPER_ROOT_EDIT                               = Edit Camper Zone
+CAMPER_ROOT_REMOVE                             = Remove Camper Zone
+CAMPER_ROOT_SAVE                               = Save Data
+CAMPER_ROOT_STATUS                             = Status Camper Zone
+CAMPER_ROOT_NOCLIP                             = Status noclip %L
+CAMPER_ROOT_GODMODE                            = Status godmode %L
+CAMPER_ROOT_SCALE                              = Adjust scaling
 
-CAMPER_STATUS_CURRENT                  = Status Camper Zone >> %s%L
-CAMPER_STATUS_ALL_ENABLE               = Enable All Camper Zones
-CAMPER_STATUS_ALL_DISABLE              = Disable All Camper Zones
+CAMPER_EDIT_STATUS                             = Edit Status
 
-CAMPER_REMOVE_CURRENT                  = Remove Camper Zone
-CAMPER_REMOVE_ALL                      = Remove All Camper Zones
+CAMPER_REMOVE_CURRENT                          = Remove Camper Zone >> \y%s
+CAMPER_REMOVE_ALL                              = Remove All Camper Zones
 
-CAMPER_SCALE_HEIGHT                    = %L Height
-CAMPER_SCALE_WIDTH                     = %L Width
-CAMPER_SCALE_DEPTH                     = %L Depth
-CAMPER_SCALE_FACTOR                    = Scale Factor >> %sx%.2f
-CAMPER_SCALE_MODE                      = Scale Mode >> %L
-CAMPER_SCALE_PLACE                     = Place Camper Zone
+CAMPER_STATUS_CURRENT                          = Status Camper Zone >> %s%s %L
+CAMPER_STATUS_ALL_ENABLE                       = Enable All Camper Zones
+CAMPER_STATUS_ALL_DISABLE                      = Disable All Camper Zones
+
+CAMPER_SCALE_HEIGHT                            = %L Height
+CAMPER_SCALE_WIDTH                             = %L Width
+CAMPER_SCALE_DEPTH                             = %L Depth
+CAMPER_SCALE_FACTOR                            = Scale Factor >> %sx%.2f
+CAMPER_SCALE_MODE                              = Scale Mode >> %L
+CAMPER_SCALE_PLACE                             = Place Camper Zone
