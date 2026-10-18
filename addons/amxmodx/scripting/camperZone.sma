@@ -59,7 +59,6 @@
 #define SOUND_ALERT                 "buttons/bell1.wav"
 
 new const PLUGIN_VERSION[]          = "1.0"
-new const Float:DELAY_ON_CONNECT    = 1.0
 new const Float:DELAY_ON_LOAD       = 1.0
 new const ERROR_FILE[]              = "CamperZone_ERRORS.log"
 
@@ -356,10 +355,6 @@ ReadFile()
     new eCamper[CAMPER]
     if ( g_bFileWasRead )
     {
-        for ( new id = 1; id <= g_iMaxPlayers; id ++ )
-            if ( is_user_connected(id) )
-                UpdateData(id)
-
         ArrayClear(g_eSettings[SETTING_DEFAULT_WARNING_MESSAGE])
         ArrayClear(g_aCamperConfig)
         g_iCamperConfig = 0
@@ -577,11 +572,6 @@ ReadFile()
     fclose(iFile)
 }
 
-public client_authorized(id)
-{
-    set_task(DELAY_ON_CONNECT, "UpdateData", id)
-}
-
 public client_disconnected(id)
 {
     new eCamper[CAMPER], iItem
@@ -594,11 +584,6 @@ public client_disconnected(id)
     DisableAction(id)
     g_ePlayerData[id][PDATA_CAMPER_GHOST]   = 0
     g_ePlayerData[id][PDATA_CAMPER_MENU]    = 0
-}
-
-public UpdateData(id)
-{
-    g_ePlayerData[id][PDATA_OFFSET] = g_eSettings[SETTING_OFFSET_BASE]
 }
 
 public camperInit()
