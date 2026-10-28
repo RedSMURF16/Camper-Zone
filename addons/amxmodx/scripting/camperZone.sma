@@ -48,6 +48,12 @@
 #endif
 
 #define MAX_ENT                     32
+#define CAMPER_CHECK                10.0
+#define CAMPER_OFFSET_BASE          90.0
+#define CAMPER_OFFSET_MIN           42.0
+#define CAMPER_OFFSET_MAX           900.0
+#define CAMPER_OFFSET_STEP          10.0
+#define CAMPER_GHOST_ALPHA          128
 #define ADMIN_ACCESS                ADMIN_RCON
 #define CAMPER_KEY                  294102
 #define CAMPER_ARRAY_ITEM           pev_iuser1
@@ -119,13 +125,7 @@ enum _:MAIN_SETTINGS
     SETTING_DEFAULT_DAMAGETYPE,
 
     bool:SETTING_CAMPER_LOAD,
-    Float:SETTING_CAMPER_CHECK,
     Float:SETTING_CAMPER_TASK,
-    Float:SETTING_OFFSET_BASE,
-    Float:SETTING_OFFSET[2],
-    Float:SETTING_OFFSET_STEP,
-    SETTING_GHOST_ALPHA,
-
     Float:SETTING_SIZE_BASE,
     Float:SETTING_SIZE_HEIGHT[2],
     Float:SETTING_SIZE_WIDTH[2],
@@ -493,18 +493,8 @@ ReadFile()
                             parseSetting(DTYPE_INT, szValue, charsmax(szValue), g_eSettings[SETTING_DEFAULT_DAMAGETYPE], charsmax(g_eSettings[SETTING_DEFAULT_DAMAGETYPE]))
                         else if ( equali(szKey, "SETTING_CAMPER_LOAD") )
                             parseSetting(DTYPE_INT, szValue, charsmax(szValue), g_eSettings[SETTING_CAMPER_LOAD], charsmax(g_eSettings[SETTING_CAMPER_LOAD]))
-                        else if ( equali(szKey, "SETTING_CAMPER_CHECK") )
-                            parseSetting(DTYPE_FLOAT, szValue, charsmax(szValue), g_eSettings[SETTING_CAMPER_CHECK], charsmax(g_eSettings[SETTING_CAMPER_CHECK]))
                         else if ( equali(szKey, "SETTING_CAMPER_TASK") )
                             parseSetting(DTYPE_FLOAT, szValue, charsmax(szValue), g_eSettings[SETTING_CAMPER_TASK], charsmax(g_eSettings[SETTING_CAMPER_TASK]))
-                        else if ( equali(szKey, "SETTING_OFFSET_BASE") )
-                            parseSetting(DTYPE_FLOAT, szValue, charsmax(szValue), g_eSettings[SETTING_OFFSET_BASE], charsmax(g_eSettings[SETTING_OFFSET_BASE]))
-                        else if ( equali(szKey, "SETTING_OFFSET") )
-                            parseSetting(DTYPE_FLOAT, szValue, charsmax(szValue), g_eSettings[SETTING_OFFSET], charsmax(g_eSettings[SETTING_OFFSET]))
-                        else if ( equali(szKey, "SETTING_OFFSET_STEP") )
-                            parseSetting(DTYPE_FLOAT, szValue, charsmax(szValue), g_eSettings[SETTING_OFFSET_STEP], charsmax(g_eSettings[SETTING_OFFSET_STEP]))
-                        else if ( equali(szKey, "SETTING_GHOST_ALPHA") )
-                            parseSetting(DTYPE_INT, szValue, charsmax(szValue), g_eSettings[SETTING_GHOST_ALPHA], charsmax(g_eSettings[SETTING_GHOST_ALPHA]))
                         else if ( equali(szKey, "SETTING_SIZE_BASE") )
                             parseSetting(DTYPE_FLOAT, szValue, charsmax(szValue), g_eSettings[SETTING_SIZE_BASE], charsmax(g_eSettings[SETTING_SIZE_BASE]))
                         else if ( equali(szKey, "SETTING_SIZE_HEIGHT") )
@@ -1216,7 +1206,7 @@ public camperCreate(id, iItem)
         g_ePlayerData[id][PDATA_CAMPER_ACTION] = true
         g_ePlayerData[id][PDATA_SCALE_UP] = true
         g_ePlayerData[id][PDATA_SCALE_FACTOR] = 0
-        g_ePlayerData[id][PDATA_OFFSET] = g_eSettings[SETTING_OFFSET_BASE]
+        g_ePlayerData[id][PDATA_OFFSET] = CAMPER_OFFSET_BASE
     }
 
     camperSelect(eCamper, TARGET_GHOST)
@@ -1427,14 +1417,14 @@ public fwdPreThink(id)
         {
             if ( iButton & IN_ATTACK )
             {
-                g_ePlayerData[id][PDATA_OFFSET]      += g_eSettings[SETTING_OFFSET_STEP]
-                g_ePlayerData[id][PDATA_OFFSET]      = floatclamp(g_ePlayerData[id][PDATA_OFFSET], g_eSettings[SETTING_OFFSET][0], g_eSettings[SETTING_OFFSET][1])
+                g_ePlayerData[id][PDATA_OFFSET]      += CAMPER_OFFSET_STEP
+                g_ePlayerData[id][PDATA_OFFSET]      = floatclamp(g_ePlayerData[id][PDATA_OFFSET], CAMPER_OFFSET_MIN, CAMPER_OFFSET_MAX)
                 g_ePlayerData[id][PDATA_NEXT_OFFSET] = get_gametime() + 0.1
             }
             else if ( iButton & IN_ATTACK2 )
             {
-                g_ePlayerData[id][PDATA_OFFSET]      -= g_eSettings[SETTING_OFFSET_STEP]
-                g_ePlayerData[id][PDATA_OFFSET]      = floatclamp(g_ePlayerData[id][PDATA_OFFSET], g_eSettings[SETTING_OFFSET][0], g_eSettings[SETTING_OFFSET][1])
+                g_ePlayerData[id][PDATA_OFFSET]      -= CAMPER_OFFSET_STEP
+                g_ePlayerData[id][PDATA_OFFSET]      = floatclamp(g_ePlayerData[id][PDATA_OFFSET], CAMPER_OFFSET_MIN, CAMPER_OFFSET_MAX)
                 g_ePlayerData[id][PDATA_NEXT_OFFSET] = get_gametime() + 0.1
             }
         }
@@ -1504,7 +1494,7 @@ stock camperCheck(id)
     global_get(glb_v_forward, fVec2)
 
     iBest = -1
-    fBestDist = g_eSettings[SETTING_CAMPER_CHECK]
+    fBestDist = CAMPER_CHECK
     for ( new i = 0; i < g_iCamper; i ++ )
     {
         ArrayGetArray(g_aCamper, i, eCamper)
@@ -1656,7 +1646,7 @@ stock camperSelect(eCamper[CAMPER], iAction)
     else if ( iAction == TARGET_GHOST )
     {
         iRender = kRenderTransAlpha
-        iRenderAmt = g_eSettings[SETTING_GHOST_ALPHA]
+        iRenderAmt = CAMPER_GHOST_ALPHA
     }
     else if ( iAction == TARGET_HIDE )
     {
@@ -1990,3 +1980,8 @@ stock LogConfigError(const iLine, const szText[], any:...)
 
     log_to_file(ERROR_FILE, "^nLine %d: %s", iLine, szError)
 }
+
+
+
+
+
