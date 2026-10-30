@@ -80,11 +80,13 @@ enum
     DTYPE_INT,
     DTYPE_FLOAT,
     DTYPE_FLAGS,
-    DTYPE_ARRAY_STRING,
-    DTYPE_ARRAY_SOUND,
     DTYPE_STRING_MODEL,
     DTYPE_STRING_SOUND,
-    DTYPE_STRING_MODEL_ID
+    DTYPE_ARRAY_MESSAGE,
+    DTYPE_ARRAY_MODEL,
+    DTYPE_ARRAY_SOUND,
+    DTYPE_STRING_MODEL_ID,
+    DTYPE_ARRAY_MODEL_ID
 }
 
 enum
@@ -474,7 +476,7 @@ ReadFile()
                             parseSetting(DTYPE_FLOAT, szValue, charsmax(szValue), g_eSettings[SETTING_DEFAULT_WARNING_COOLDOWN], charsmax(g_eSettings[SETTING_DEFAULT_WARNING_COOLDOWN]))
                         else if ( equali(szKey, "SETTING_DEFAULT_WARNING_MESSAGE") )
                         {
-                            parseSetting(DTYPE_ARRAY_STRING, szValue, charsmax(szValue), g_eSettings[SETTING_DEFAULT_WARNING_MESSAGE], charsmax(g_eSettings[SETTING_DEFAULT_WARNING_MESSAGE]))
+                            parseSetting(DTYPE_ARRAY_MESSAGE, szValue, charsmax(szValue), g_eSettings[SETTING_DEFAULT_WARNING_MESSAGE], charsmax(g_eSettings[SETTING_DEFAULT_WARNING_MESSAGE]))
                             g_eSettings[SETTING_DEFAULT_WARNING_MESSAGE_COUNT] ++
                         }
                         else if ( equali(szKey, "SETTING_DEFAULT_DAMAGE") )
@@ -542,7 +544,7 @@ ReadFile()
                                 eCamper[CAMPER_WARNING_MESSAGE_COUNT] = 0
                             }
 
-                            parseSetting(DTYPE_ARRAY_STRING, szValue, charsmax(szValue), eCamper[CAMPER_WARNING_MESSAGE], charsmax(eCamper[CAMPER_WARNING_MESSAGE]))
+                            parseSetting(DTYPE_ARRAY_MESSAGE, szValue, charsmax(szValue), eCamper[CAMPER_WARNING_MESSAGE], charsmax(eCamper[CAMPER_WARNING_MESSAGE]))
                             eCamper[CAMPER_WARNING_MESSAGE_COUNT] ++
                         }
                         else if ( equali(szKey, "CAMPER_DAMAGETYPE") )
@@ -1897,17 +1899,6 @@ stock parseSetting(iType, szValue[], iValueLen, any:aOutput[], iOutputLength)
         {
             aOutput[0] = read_flags(szValue)
         }
-        case DTYPE_ARRAY_STRING:
-        {
-            replace_all(szValue, iValueLen, "^"", " ")
-            replace_all(szValue, iValueLen, "^^n", "^n")
-            ArrayPushString(aOutput[0], szValue)
-        }
-        case DTYPE_ARRAY_SOUND:
-        {
-            ArrayPushString(aOutput[0], szValue)
-            if ( !g_bFileWasRead ) precache_sound(szValue)
-        }
         case DTYPE_STRING_MODEL:
         {
             copy(aOutput, iOutputLength, szValue)
@@ -1918,10 +1909,33 @@ stock parseSetting(iType, szValue[], iValueLen, any:aOutput[], iOutputLength)
             copy(aOutput, iOutputLength, szValue)
             if ( !g_bFileWasRead ) precache_sound(szValue)
         }
+        case DTYPE_ARRAY_MESSAGE:
+        {
+            replace_all(szValue, iValueLen, "^"", " ")
+            replace_all(szValue, iValueLen, "^^n", "^n")
+            ArrayPushString(aOutput[0], szValue)
+        }
+        case DTYPE_ARRAY_MODEL:
+        {
+            if ( !g_bFileWasRead )
+                precache_model(szValue)
+
+            ArrayPushString(aOutput[0], szValue)
+        }
+        case DTYPE_ARRAY_SOUND:
+        {
+            ArrayPushString(aOutput[0], szValue)
+            if ( !g_bFileWasRead ) precache_sound(szValue)
+        }
         case DTYPE_STRING_MODEL_ID:
         {
             if ( !g_bFileWasRead )
                 aOutput[0] = precache_model(szValue)
+        }
+        case DTYPE_ARRAY_MODEL_ID:
+        {
+            if ( !g_bFileWasRead )
+                ArrayPushCell(aOutput[0], precache_model(szValue))
         }
     }
 }
