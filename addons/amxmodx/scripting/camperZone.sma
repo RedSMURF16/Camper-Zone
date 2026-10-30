@@ -20,7 +20,6 @@
 
 #include <amxmodx>
 #include <amxmisc>
-#include <cstrike>
 #include <fakemeta>
 #include <hamsandwich>
 #include <xs>
@@ -1189,7 +1188,7 @@ public camperTask()
 
 public camperCreate(id, iItem)
 {
-    new iEnt = cs_create_entity("info_target")
+    new iEnt = engfunc(EngFunc_CreateNamedEntity, engfunc(EngFunc_AllocString, "info_target"))
     if ( !pev_valid(iEnt) )
         return
 
@@ -1814,7 +1813,7 @@ stock bool:isCamperActive(eCamper[CAMPER], id)
     pev(id, pev_origin, fOrigin)
 
     if ( eCamper[CAMPER_FLAGS] & FLAG_ACTIVE
-    && CsTeams:eCamper[CAMPER_TEAM] & cs_get_user_team(id)
+    && eCamper[CAMPER_TEAM] & get_user_team(id)
     && fOrigin[0] >= eCamper[CAMPER_MINS][0] && fOrigin[0] <= eCamper[CAMPER_MAXS][0]
     && fOrigin[1] >= eCamper[CAMPER_MINS][1] && fOrigin[1] <= eCamper[CAMPER_MAXS][1]
     && fOrigin[2] >= eCamper[CAMPER_MINS][2] && fOrigin[2] <= eCamper[CAMPER_MAXS][2] )
