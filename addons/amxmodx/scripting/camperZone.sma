@@ -49,6 +49,15 @@
 #define CAMPER_OFFSET_BASE          90.0
 #define CAMPER_OFFSET_MIN           42.0
 #define CAMPER_OFFSET_MAX           900.0
+#define SIZE_BASE                   32.0
+#define SIZE_HEIGHT_MIN             5.0
+#define SIZE_HEIGHT_MAX             1500.0
+#define SIZE_WIDTH_MIN              5.0
+#define SIZE_WIDTH_MAX              1500.0
+#define SIZE_DEPTH_MIN              5.0
+#define SIZE_DEPTH_MAX              1500.0
+#define BEAM_WIDTH                  5
+#define BEAM_ALPHA                  255
 #define CAMPER_OFFSET_STEP          10.0
 #define CAMPER_GHOST_ALPHA          128
 #define ADMIN_ACCESS                ADMIN_RCON
@@ -57,12 +66,13 @@
 #define PDATA_NEXT_ATTACK           83
 #define XO_CBASEPLAYER              5
 #define XO_CBASEPLAYERWEAPON        4
+#define BEAM_SPRITE                 "sprites/white.spr"
 #define SOUND_NAV                   "buttons/blip1.wav"
 #define SOUND_REMOVE                "buttons/button10.wav"
 #define SOUND_ALERT                 "buttons/bell1.wav"
 
 new const PLUGIN_VERSION[]          = "1.0"
-new const Float:DELAY_ON_LOAD       = 1.0
+new const Float:DELAY_ON_LOAD       = 2.0
 new const ERROR_FILE[]              = "CamperZone_ERRORS.log"
 
 enum
@@ -124,15 +134,7 @@ enum _:MAIN_SETTINGS
     SETTING_DEFAULT_DAMAGETYPE,
 
     bool:SETTING_CAMPER_LOAD,
-    Float:SETTING_CAMPER_TASK,
-    Float:SETTING_SIZE_BASE,
-    Float:SETTING_SIZE_HEIGHT[2],
-    Float:SETTING_SIZE_WIDTH[2],
-    Float:SETTING_SIZE_DEPTH[2],
-
-    SETTING_BEAM,
-    SETTING_BEAM_WIDTH,
-    SETTING_BEAM_ALPHA
+    Float:SETTING_CAMPER_TASK
 }
 
 enum _:CAMPER
@@ -282,7 +284,7 @@ new Array:g_aCamper, Array:g_aCamperConfig,
     g_ePlayerData[MAX_PLAYERS + 1][PLAYER_DATA],
     bool:g_bFileWasRead, g_iActivePlayers,
     HamHook:g_iFwdPreThink, HamHook:g_iFwdKilled,
-    g_iCamper, g_iCamperConfig,
+    g_iCamper, g_iCamperConfig, g_iBeam,
     g_iMaxPlayers
 
 public plugin_init()
@@ -305,6 +307,7 @@ public plugin_init()
 
 public plugin_precache()
 {
+    g_iBeam = precache_model(BEAM_SPRITE)
     g_aCamper = ArrayCreate(CAMPER)
     g_aCamperConfig = ArrayCreate(CAMPER)
     g_eSettings[SETTING_DEFAULT_WARNING_MESSAGE] = ArrayCreate(MAX_VALUE_LENGTH)
@@ -492,20 +495,6 @@ ReadFile()
                             parseSetting(DTYPE_INT, szValue, charsmax(szValue), g_eSettings[SETTING_CAMPER_LOAD], charsmax(g_eSettings[SETTING_CAMPER_LOAD]))
                         else if ( equali(szKey, "SETTING_CAMPER_TASK") )
                             parseSetting(DTYPE_FLOAT, szValue, charsmax(szValue), g_eSettings[SETTING_CAMPER_TASK], charsmax(g_eSettings[SETTING_CAMPER_TASK]))
-                        else if ( equali(szKey, "SETTING_SIZE_BASE") )
-                            parseSetting(DTYPE_FLOAT, szValue, charsmax(szValue), g_eSettings[SETTING_SIZE_BASE], charsmax(g_eSettings[SETTING_SIZE_BASE]))
-                        else if ( equali(szKey, "SETTING_SIZE_HEIGHT") )
-                            parseSetting(DTYPE_FLOAT, szValue, charsmax(szValue), g_eSettings[SETTING_SIZE_HEIGHT], charsmax(g_eSettings[SETTING_SIZE_HEIGHT]))
-                        else if ( equali(szKey, "SETTING_SIZE_WIDTH") )
-                            parseSetting(DTYPE_FLOAT, szValue, charsmax(szValue), g_eSettings[SETTING_SIZE_WIDTH], charsmax(g_eSettings[SETTING_SIZE_WIDTH]))
-                        else if ( equali(szKey, "SETTING_SIZE_DEPTH") )
-                            parseSetting(DTYPE_FLOAT, szValue, charsmax(szValue), g_eSettings[SETTING_SIZE_DEPTH], charsmax(g_eSettings[SETTING_SIZE_DEPTH]))
-                        else if ( equali(szKey, "SETTING_BEAM") )
-                            parseSetting(DTYPE_STRING_MODEL_ID, szValue, charsmax(szValue), g_eSettings[SETTING_BEAM], charsmax(g_eSettings[SETTING_BEAM]))
-                        else if ( equali(szKey, "SETTING_BEAM_WIDTH") )
-                            parseSetting(DTYPE_INT, szValue, charsmax(szValue), g_eSettings[SETTING_BEAM_WIDTH], charsmax(g_eSettings[SETTING_BEAM_WIDTH]))
-                        else if ( equali(szKey, "SETTING_BEAM_ALPHA") )
-                            parseSetting(DTYPE_INT, szValue, charsmax(szValue), g_eSettings[SETTING_BEAM_ALPHA], charsmax(g_eSettings[SETTING_BEAM_ALPHA]))
                     }
                     case SECTION_CAMPER:
                     {
@@ -1047,14 +1036,14 @@ public menuHandlerScale(id, menu, item)
             if ( g_ePlayerData[id][PDATA_SCALE_UP] )
             {
                 eCamper[CAMPER_SCALE][2] += g_fScaleFactor[g_ePlayerData[id][PDATA_SCALE_FACTOR]]
-                if (eCamper[CAMPER_SCALE][2] > g_eSettings[SETTING_SIZE_HEIGHT][1])
-                    eCamper[CAMPER_SCALE][2] = g_eSettings[SETTING_SIZE_HEIGHT][1]
+                if ( eCamper[CAMPER_SCALE][2] > SIZE_HEIGHT_MAX )
+                    eCamper[CAMPER_SCALE][2] = SIZE_HEIGHT_MAX
             }
             else
             {
                 eCamper[CAMPER_SCALE][2] -= g_fScaleFactor[g_ePlayerData[id][PDATA_SCALE_FACTOR]]
-                if (eCamper[CAMPER_SCALE][2] < g_eSettings[SETTING_SIZE_HEIGHT][0])
-                    eCamper[CAMPER_SCALE][2] = g_eSettings[SETTING_SIZE_HEIGHT][0]
+                if ( eCamper[CAMPER_SCALE][2] < SIZE_HEIGHT_MIN )
+                    eCamper[CAMPER_SCALE][2] = SIZE_HEIGHT_MIN
             }
 
             ArraySetArray(g_aCamper, iItem, eCamper)
@@ -1066,14 +1055,14 @@ public menuHandlerScale(id, menu, item)
             if ( g_ePlayerData[id][PDATA_SCALE_UP] )
             {
                 eCamper[CAMPER_SCALE][0] += g_fScaleFactor[g_ePlayerData[id][PDATA_SCALE_FACTOR]]
-                if (eCamper[CAMPER_SCALE][0] > g_eSettings[SETTING_SIZE_WIDTH][1])
-                    eCamper[CAMPER_SCALE][0] = g_eSettings[SETTING_SIZE_WIDTH][1]
+                if ( eCamper[CAMPER_SCALE][0] > SIZE_WIDTH_MAX )
+                    eCamper[CAMPER_SCALE][0] = SIZE_WIDTH_MAX
             }
             else
             {
                 eCamper[CAMPER_SCALE][0] -= g_fScaleFactor[g_ePlayerData[id][PDATA_SCALE_FACTOR]]
-                if (eCamper[CAMPER_SCALE][0] < g_eSettings[SETTING_SIZE_WIDTH][0])
-                    eCamper[CAMPER_SCALE][0] = g_eSettings[SETTING_SIZE_WIDTH][0]
+                if ( eCamper[CAMPER_SCALE][0] < SIZE_WIDTH_MIN )
+                    eCamper[CAMPER_SCALE][0] = SIZE_WIDTH_MIN
             }
 
             ArraySetArray(g_aCamper, iItem, eCamper)
@@ -1085,14 +1074,14 @@ public menuHandlerScale(id, menu, item)
             if ( g_ePlayerData[id][PDATA_SCALE_UP] )
             {
                 eCamper[CAMPER_SCALE][1] += g_fScaleFactor[g_ePlayerData[id][PDATA_SCALE_FACTOR]]
-                if (eCamper[CAMPER_SCALE][1] > g_eSettings[SETTING_SIZE_DEPTH][1])
-                    eCamper[CAMPER_SCALE][1] = g_eSettings[SETTING_SIZE_DEPTH][1]
+                if ( eCamper[CAMPER_SCALE][1] > SIZE_DEPTH_MAX )
+                    eCamper[CAMPER_SCALE][1] = SIZE_DEPTH_MAX
             }
             else
             {
                 eCamper[CAMPER_SCALE][1] -= g_fScaleFactor[g_ePlayerData[id][PDATA_SCALE_FACTOR]]
-                if (eCamper[CAMPER_SCALE][1] < g_eSettings[SETTING_SIZE_DEPTH][0])
-                    eCamper[CAMPER_SCALE][1] = g_eSettings[SETTING_SIZE_DEPTH][0]
+                if ( eCamper[CAMPER_SCALE][1] < SIZE_DEPTH_MIN )
+                    eCamper[CAMPER_SCALE][1] = SIZE_DEPTH_MIN
             }
 
             ArraySetArray(g_aCamper, iItem, eCamper)
@@ -1195,7 +1184,7 @@ public camperCreate(id, iItem)
     new eCamper[CAMPER]
     ArrayGetArray(g_aCamperConfig, iItem, eCamper)
     eCamper[CAMPER_ID] = iEnt
-    eCamper[CAMPER_SCALE][0] = eCamper[CAMPER_SCALE][1] = eCamper[CAMPER_SCALE][2] = g_eSettings[SETTING_SIZE_BASE]
+    eCamper[CAMPER_SCALE][0] = eCamper[CAMPER_SCALE][1] = eCamper[CAMPER_SCALE][2] = SIZE_BASE
     if ( id )
     {
         EnableAction(id)
@@ -1717,11 +1706,11 @@ stock beamDraw(Float:fStart[3], Float:fEnd[3], bool:bActive)
     write_coord_f(fEnd[0])
     write_coord_f(fEnd[1])
     write_coord_f(fEnd[2])
-    write_short(g_eSettings[SETTING_BEAM])
+    write_short(g_iBeam)
     write_byte(0)
     write_byte(0)
     write_byte(1)
-    write_byte(g_eSettings[SETTING_BEAM_WIDTH])
+    write_byte(BEAM_WIDTH)
     write_byte(0)
     if ( bActive )
     {
@@ -1735,7 +1724,7 @@ stock beamDraw(Float:fStart[3], Float:fEnd[3], bool:bActive)
         write_byte(0)
         write_byte(0)
     }
-    write_byte(g_eSettings[SETTING_BEAM_ALPHA])
+    write_byte(BEAM_ALPHA)
     write_byte(0)
     message_end()
 }
