@@ -14,7 +14,10 @@ Custom setups are saved per map and automatically loaded on every map start.
 - Configurable per zone: team restriction, warning behavior, damage values, reset delay and damage multiplier
 - Delayed and timed activation with random ranges for round-based gameplay
 - Intuitive ghost preview with real-time resizing for accurate placement
-- [color=red]Requires AMX Mod X 1.9.0+[/color]
+
+## 📋 Requirements
+- ReGameDLL
+- AMX Mod X 1.10+
 
 ## 💬 Commands
 - `say /cz` - Opens the Camper Zone menu.
