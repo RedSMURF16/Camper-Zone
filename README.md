@@ -1,7 +1,7 @@
 <h1 align="center">Camper Zone</h1>
 
 <p align="center">
-  <a href="https://www.youtube.com/watch?v=3Y6oGRHNtb0"><img src="https://img.youtube.com/vi/3Y6oGRHNtb0/maxresdefault.jpg" alt="Watch on YouTube" width="600"></a>
+  <img src="images/demo.gif" alt="Camper Zone">
 </p>
 
 ## 📝 Description
